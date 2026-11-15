@@ -6,7 +6,9 @@
   DEVSA FM's YouTube thumbnail, 1280x720, built from real frames of the scenes.
   thumb.html?a  the River Walk boat, big title
   thumb.html?b  four scenes in a grid, the title on a plate in the middle
-  Render with: node shot.cjs (writes devsa-fm-thumbnail-a.png and -b.png)
+  thumb.html?c  the >FM radio mark over the River Walk; ?d the mark over four scenes
+  thumb.html?e  the >FM alt mark (one colour, like DEVSA's alt logo) over the night bus, as on devsa.community/fm
+  Render with: node shot.cjs
 -->
 <style>
   @font-face { font-family: "Geist Mono"; font-weight: 700; src: url(../scene/fonts/GeistMono-Bold.woff2) format("woff2"); }
@@ -47,6 +49,14 @@
   #d .plate { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: rgba(22,22,22,.97); padding: 26px 48px 26px; border-radius: 18px; border: 2px solid rgba(255,255,255,.14); text-align: center }
   #d .radio { display: block; height: 250px; margin: 0 auto 14px }
   #d .sub { font-size: 26px }
+  /* E: the alt mark over the night bus (night-bus-18.5.png, a frame of commute.html?night with "DEVSA FM" on
+     its sign), the bus on the right, the copy on a dark fade on the left; the stream's footer is pushed off the bottom */
+  #e .frame { inset: 0; background-image: url(night-bus-18.5.png); background-size: 1520px 855px; background-position: 90px -52px; background-color: #0c0c0c }
+  #e .shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(12,12,12,.98) 0%, rgba(12,12,12,.96) 38%, rgba(12,12,12,0) 56%), linear-gradient(0deg, rgba(12,12,12,.7), rgba(12,12,12,0) 24%) }
+  #e .copy { position: absolute; left: 60px; top: 40px }
+  #e .radio { display: block; height: 360px; margin-bottom: 24px }
+  #e .sub { font-size: 31px; line-height: 1.25; width: 560px }
+  #e .tag { position: absolute; left: 60px; bottom: 46px; font-family: "Geist Mono"; font-weight: 700; font-size: 26px; letter-spacing: 3px; color: #ffcf6a }
   /* the DEVSA mark, as shipped, with the FM wordmark beside it (never the word DEVSA beside the mark) */
   .lockup { display: flex; align-items: flex-end; gap: 28px }
   .lockup img { display: block }
@@ -99,8 +109,16 @@
     <div class="sub">Tejano lofi radio · San Antonio in ASCII</div>
   </div>
 </div>
+<div id="e" hidden>
+  <div class="frame"></div><div class="shade"></div>
+  <div class="copy">
+    <img class="radio" src="devsa-fm-alt-mark.svg" alt="DEVSA FM">
+    <div class="sub">Tejano lofi radio for San Antonio's<br>learners and builders</div>
+  </div>
+  <div class="tag">devsa.community/fm</div>
+</div>
 <script>
-  const v = (location.search.match(/[abcd]/) || ["a"])[0]
+  const v = (location.search.match(/[abcde]/) || ["a"])[0]
   document.getElementById(v).hidden = false
 </script>
 </body>
