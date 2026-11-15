@@ -17,7 +17,7 @@ presented as yours) without DEVSA's written permission. Ask at devsa.community.
 | `scene/pysa-mascot-full.webp` | the PySanAntonio mascot |
 | `scene/alamo-python-dark.png` | the Alamo Python mark, designed by DEVSA |
 | `scene/proj/mhth/`, `scene/proj/pysa/`, `scene/proj/ag/` | frames from DEVSA's conference films: More Human Than Human, PySanAntonio, Access Granted |
-| `social/`, `thumbnail/` (images) | DEVSA FM's social graphics and stream thumbnails |
+| `social/`, `thumbnail/`, `.github/media/` (images) | DEVSA FM's social graphics, stream thumbnails and the stills and GIF in the README |
 
 When you use the mark, keep it as it is: no wordmark set beside it, never inverted or recoloured.
 

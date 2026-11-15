@@ -4,15 +4,14 @@
 
 ## Stills
 
-<!-- Two or three PNGs from `npm run still -- <scene> 5 20 40`. -->
+<!-- Optional: the Scene check attaches stills automatically. Add your own from `npm run still -- <scene> 5 20 40` if a moment matters. -->
 
 ## Checklist
 
 - [ ] One scene (or one fix) in this pull request
 - [ ] 1920 × 1080, uses `fmkit.js`, starts with `fm.start(render, [...])`
-- [ ] Loops seamlessly over `fm.T` (I watched the seam in `npm run preview`)
-- [ ] Same frame for the same `t`: no `Math.random()`, no clock
-- [ ] Runs without `scene/icons/` and the group/partner logos
+- [ ] `npm run check -- <scene>` passes (runs without the optional assets, deterministic, no seam)
+- [ ] I watched it loop in `npm run preview`
 - [ ] No other organizations' logos, no real businesses' names, no real people, no copied art
 - [ ] Bottom 130 px left clear for the footer
 - [ ] `window.SCENE_BY` set to how I'd like to be credited

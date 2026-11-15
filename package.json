@@ -5,7 +5,9 @@
   "scripts": {
     "preview": "node tools/preview.cjs",
     "still": "node tools/still.cjs",
-    "clip": "node tools/clip.cjs"
+    "clip": "node tools/clip.cjs",
+    "check": "node tools/check.cjs",
+    "site": "node tools/site.cjs"
   },
   "keywords": [
     "ascii",

@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!--
+  DEVSA FM, the GitHub repo's social preview: 1280x640, what shows when the repo's link is shared.
+  The >FM mark on its own (no "DEVSA" wordmark beside it), the pitch, four real frames from the stream.
+  Render with: node thumbnail/github-social.cjs  (writes .github/media/social-preview.png), then upload it in
+  the repo's Settings → General → Social preview.
+-->
+<style>
+  @font-face { font-family: "Geist Mono"; font-weight: 700; src: url(../scene/fonts/GeistMono-Bold.woff2) format("woff2"); }
+  @font-face { font-family: "Geist"; font-weight: 500; src: url(../scene/fonts/Geist-Medium.woff2) format("woff2"); }
+  @font-face { font-family: "Geist"; font-weight: 900; src: url(../scene/fonts/Geist-Black.woff2) format("woff2"); }
+  * { box-sizing: border-box }
+  html, body { margin: 0; width: 1280px; height: 640px; background: #171717; color: #f4f4f5; overflow: hidden }
+  body { display: flex; align-items: center; gap: 48px; padding: 0 64px 0 72px; font-family: "Geist" }
+  .left { width: 470px; flex: none; display: flex; flex-direction: column }
+  .mark { width: 132px; margin-bottom: 28px }
+  h1 { margin: 0; font-weight: 900; font-size: 56px; line-height: 1; letter-spacing: -.02em }
+  p { margin: 22px 0 0; font-weight: 500; font-size: 22px; line-height: 1.35; color: rgba(255,255,255,.72) }
+  .repo { margin-top: 30px; font-family: "Geist Mono"; font-weight: 700; font-size: 17px; letter-spacing: .04em; color: rgba(255,255,255,.8) }
+  .bars { display: flex; gap: 6px; margin-top: 12px } .bars i { width: 46px; height: 6px }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; flex: 1 }
+  .shot { position: relative; aspect-ratio: 16 / 9; border-radius: 12px; overflow: hidden; background: #0c0c0c }
+  .shot img { width: 100%; height: 100%; object-fit: cover; display: block }
+  .shot span { position: absolute; left: 10px; bottom: 10px; padding: 4px 8px 3px; border-radius: 5px; background: rgba(12,12,12,.82);
+    font-family: "Geist Mono"; font-weight: 700; font-size: 13px; letter-spacing: .14em; text-transform: uppercase }
+</style>
+</head>
+<body>
+  <div class="left">
+    <img class="mark" src="../mark/devsa-fm-mark.svg" alt="">
+    <h1>A night in<br>San Antonio,<br>in ASCII.</h1>
+    <p>DEVSA's lofi livestream, open source.<br>Build a scene for it: one HTML file.</p>
+    <div class="repo">github.com/devsanantonio/devsa-fm</div>
+    <div class="bars"><i style="background:#00b2a9"></i><i style="background:#ef426f"></i><i style="background:#ff8200"></i></div>
+  </div>
+  <div class="grid">
+    <div class="shot"><img src="../.github/media/paseo.jpg"><span>Lotería</span></div>
+    <div class="shot"><img src="../.github/media/cathedral.jpg"><span>San Fernando</span></div>
+    <div class="shot"><img src="../.github/media/riverwalk.jpg"><span>The River Walk</span></div>
+    <div class="shot"><img src="../.github/media/taco.jpg"><span>The taco truck</span></div>
+  </div>
+</body>
+</html>

@@ -14,6 +14,8 @@ JavaScript and draw on a canvas, you can make a scene that airs.
 
 ## Get it running
 
+To look first, open the [playground](https://devsanantonio.github.io/devsa-fm/): every scene, live in the browser.
+
 You need [Node.js](https://nodejs.org) 18+ and Google Chrome. ffmpeg is only needed for clips.
 
 ```sh
@@ -35,6 +37,7 @@ On Linux or Windows, point the tools at Chrome with `CHROME=/path/to/chrome`.
 cp scene/starter.html scene/my-scene.html
 npm run preview          # open http://localhost:8210/my-scene.html, edit, refresh
 npm run still -- my-scene 5 20 40          # PNGs in out/stills/ to check your work
+npm run check -- my-scene                  # the scene contract, checked (below)
 ```
 
 The starter explains the three layers in its comments. In short, `render(t)` draws one frame for
@@ -58,6 +61,9 @@ A scene must:
   aren't in the repo. `fm.loadIcons` and `fm.onGround` already skip what's missing; do the same if you
   load anything else;
 - leave the bottom 130 px clear for the footer (`footer(t)`: DEVSA FM, the site, the song).
+
+`npm run check -- my-scene` tests the first four for you: it loads the scene with only what's in the repo,
+draws the same second twice and compares, and compares `t = 0` with `t = fm.T`. Every pull request runs it too.
 
 To sync a scene to a song's beat, use `fm.pulseAt(t)` (a 0–1 flash on each beat). When the scene is
 synced on stream it gets the song's measured beat grid; in the preview it uses a default tempo.
@@ -87,7 +93,8 @@ Look at `taco.html`, `riverwalk.html` and `paseo.html` before you start. What th
 1. One scene (or one fix) per pull request.
 2. Credit yourself: put `window.SCENE_BY = "Your Name"` (or your @handle) near the top of your scene's
    script. It shows in the footer when the scene airs.
-3. Attach two or three stills from `npm run still`, and say in a sentence what happens in the loop.
+3. Say in a sentence what happens in the loop. The **Scene check** on your pull request attaches stills of
+   your scene; add your own from `npm run still` if a moment matters.
 4. Fill in the checklist in the pull request template.
 
 ## What happens next
@@ -102,4 +109,5 @@ By contributing, you agree your code is released under the MIT license in `LICEN
 
 ## Questions
 
-Ask in the [DEVSA Discord](https://devsa.community/discord) or open an issue.
+Ask in the [DEVSA Discord](https://devsa.community/discord) or open an issue. Running a build night?
+[`docs/workshop.md`](docs/workshop.md) is a two-hour session plan.

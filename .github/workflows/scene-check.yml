@@ -1,0 +1,57 @@
+# Checks the scenes a pull request touches against the scene contract (CONTRIBUTING.md), on a clean
+# checkout, so without the City's icons and the logos: it runs, it's deterministic, it loops without a
+# seam. Stills of each changed scene are attached to the run, so reviewers can see it without running it.
+name: Scene check
+
+on:
+  pull_request:
+    paths: ["scene/**", "tools/check.cjs", "package.json", "package-lock.json"]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Which scenes changed
+        id: scenes
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          changed=$(git diff --name-only --diff-filter=d "$BASE"...HEAD)
+          # a change to the shared kit can break any scene, so check them all
+          if echo "$changed" | grep -qE '^scene/(fmkit|plush)\.js$|^tools/check\.cjs$'; then
+            echo "list=" >> "$GITHUB_OUTPUT"
+          else
+            list=$(echo "$changed" | grep -E '^scene/[A-Za-z0-9_-]+\.html$' | xargs -r -n1 basename | sed 's/\.html$//' | tr '\n' ' ')
+            if [ -z "$list" ]; then list=starter; fi
+            echo "list=$list" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Check
+        env:
+          CHROME: /usr/bin/google-chrome
+          SCENES: ${{ steps.scenes.outputs.list }}
+        run: node tools/check.cjs $SCENES
+      - name: Summary
+        if: always()
+        run: |
+          if [ -f out/check/summary.md ]; then
+            { echo "## Scene check"; echo; cat out/check/summary.md; echo
+              echo "Stills of each scene are in the **scene-stills** artifact below."; } >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scene-stills
+          path: out/check/*.png
+          if-no-files-found: ignore

@@ -1,0 +1,44 @@
+# Publishes the playground (tools/site.cjs) to GitHub Pages: every scene, live in the browser.
+name: Playground
+
+on:
+  push:
+    branches: [main]
+    paths: ["scene/**", "tools/site.cjs", "tools/scenes.json", "mark/**", ".github/media/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: node tools/site.cjs
+        env:
+          CHROME: /usr/bin/google-chrome
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
