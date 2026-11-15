@@ -239,7 +239,10 @@ function art(id, a, t) {                                   // a card's picture, 
     ;[PINK, "#ffd166", "#7bd88f"].forEach((c, k) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(-a * .38 + k * a * .1, -a * .24, a * .03, 0, TAU); ctx.fill() })
     ctx.fillStyle = "#e9f5f4"; ctx.font = `700 ${Math.round(a * .3)}px "Geist Mono"`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(">_", 0, a * .06) }
   else { const im = d.icon && inked(d.icon, d.c)
-    if (im && im.complete && im.width) { const k = a * 1.2 / Math.max(im.vb[2], im.vb[3]), w = im.vb[2] * k, h = im.vb[3] * k; ctx.drawImage(im, -w / 2, -h / 2, w, h) } }
+    if (im && im.complete && im.width) { const k = a * 1.2 / Math.max(im.vb[2], im.vb[3]), w = im.vb[2] * k, h = im.vb[3] * k; ctx.drawImage(im, -w / 2, -h / 2, w, h) }
+    else if (!ICONS[d.icon]) {                             // without the City's icons (a fresh clone): the noun's initial
+      ctx.fillStyle = d.c; ctx.font = `700 ${Math.round(a * .95)}px "Geist Mono"`; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+      ctx.fillText(d.name.split(" ").pop()[0], 0, a * .04) } }
 }
 function card(id, cx, cy, w, t, flipX = 1) {               // a lotería card: cream stock, a coloured border, number, picture, name
   const h = w * 1.5, d = DECK[id]

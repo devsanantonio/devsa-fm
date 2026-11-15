@@ -13,16 +13,20 @@
 <body>
 <!--
   DEVSA FM, the cathedral: San Fernando on Main Plaza at night, in the River Walk's ASCII style, with a
-  projection show on its face the way the plaza's light shows use the building. DEVSA's colours stay on
-  the building throughout (teal tower, pink gable, orange tower, the tabs' bars running down). Over them,
-  five films, 8 s each: the DEVSA mark, More Human Than Human (its HEAD film), PySanAntonio (the mascot),
-  Access Granted (the padlock), The Model (its node graph, the Claude Code mascots marching). After each
-  film, a run of logos, one at a time, large, with its name: all 31 community groups, then nine
-  partners. The loop is 180 s on stream (LOOP_SECONDS, set in stream.sh), about 3 s per logo. The films are frame sequences in proj/ (15 fps), so render(t) is exact.
-  The projection is added over the stone and tints the stone's characters, so the light lands on the
-  building; the doors and belfry openings stay dark. Agents cross the plaza, Linux San Antonio's penguin
-  rides by on a bicycle twice a minute, nothing else stands in the plaza: the projection is the show.
-  1920x1080, a seamless 60 s loop: render(t) draws a frame.
+  projection show mapped onto its face, the way the plaza's light shows use the building.
+
+  The facade is traced from a photo (F() maps the photo's pixels onto the canvas), so the towers, the
+  rose window, the oculi and the openings are where they really are.
+
+  The show, a loop of segments: for each, the whole building plays (a grid on each tower face that follows
+  the coursing, chevrons down the buttresses, the rose and oculi on the beat), a sweep of hatched strokes
+  washes across, a film arrives inside the central arch, and the next sweep carries it away. The DEVSA mark
+  opens the loop; then More Human Than Human, PySanAntonio, Access Granted and The Model. The films are
+  frame sequences in proj/ (15 fps), so render(t) is exact for any t.
+
+  The projection lights the stone's characters and the doors and belfry openings stay dark. Agents watch
+  from folding chairs on the plaza, backs to us; Linux San Antonio's penguin rides by on a bicycle.
+  1920x1080; the loop is fm.T long (synced to "Smooth Tech-jano" on stream).
 -->
 <canvas id="c" width="1920" height="1080"></canvas>
 <script src="plush.js"></script>
@@ -82,8 +86,6 @@ const OPENINGS = [...SIDE, ...SIDE.map(([a, b, c, d, k]) => [MIRROR(c), b, MIRRO
   .map(([x0, y0, x1, y1, k]) => { const [a, b] = F(x0, y0), [c, d] = F(x1, y1); return [a, b, c - a, d - b, k] })
 const shape = (c, [x, y, w, h, k]) => (k === "round" ? rounded : pointed)(c, x, y, w, h)
 const ROSE = [fx(960), fy(1050), 108 * S], OCULI = [[fx(480), fy(997)], [fx(1440), fy(997)]], OCULUS_R = 62 * S
-// where the community's logos go: across each tower's belfry pair, lit like signs
-const BELFRY = [[fx(400), fy(440), (578 - 400) * S, (820 - 440) * S], [fx(1342), fy(440), (1520 - 1342) * S, (820 - 440) * S]]
 
 function paint(t) {
   g.setTransform(1 / CELL, 0, 0, 1 / CELL, 0, 0)
@@ -219,54 +221,9 @@ const seq = (dir, n) => Array.from({ length: n }, (_, k) => img(`proj/${dir}/${S
 const FILM = { mhth: seq("mhth", 188), pysa: seq("pysa", 107), ag: seq("ag", 128) }
 const frameOf = (film, sec) => film[Math.floor(sec * 15) % film.length]
 const MARK = img("devsa-alt-logo.svg")
-// [file, name], in the roundtable deck's order; AITX uses its square mark, as on the deck's nodes
-const GROUP_LIST = [["g0.png", "DEF CON Group SATX"], ["g1.png", "Alamo City AI"], ["g2.png", "ACM UTSA"], ["g3.png", "UTSA CyberJedis"],
-  ["g4.png", "Alamo Tech Collective"], ["g5.png", "ACM San Antonio"], ["g6.png", "Alamo Python"], ["g7.png", "Linux San Antonio"],
-  ["g8.png", "AWS User Group"], ["g9.png", "Greater Gaming Society"], ["g10.png", ".NET User Group"], ["g11.png", "Google Developer Group"],
-  ["g12.png", "Geeks && {...}"], ["g13.png", "SAHA"], ["g14-mark.png", "AITX"], ["g16.png", "Datanauts"], ["g17-2026.png", "Alamo City Locksport"],
-  ["g18.png", "OWASP San Antonio"], ["g19.png", "Alamo Regional Data Alliance"], ["g21.png", "Unreal Engine SA"], ["g22.png", "Red Hat User Group"],
-  ["g23.png", "UXSA"], ["g24.png", "Latinas in Tech"], ["g25.svg", "Alamo City Unity User Group"], ["sa-ruby-coders.png", "SA Ruby Coders"],
-  ["aws-sbg-wgu.png", "AWS Student Builder Group · WGU"], ["acm-tu.png", "ACM TU"], ["tech-study-buddy.png", "Tech Study Buddy"],
-  ["rowdycybercon.png", "RowdyCyberCon"], ["agentic-nights.png", "Agentic Nights"], ["wicys-utsa.png", "Women in Cybersecurity at UTSA"]]
-// the partners shown on the cathedral (a chosen nine, not every partner in the directory)
-const PARTNER_LIST = [["tvsa.png", "TVSA"], ["pytexas.png", "PyTexas Foundation"], ["bsides.png", "BSides San Antonio"], ["geekdom.svg", "Geekdom"],
-  ["learnopentech.svg", "learnOPENtech"], ["txlf.png", "Texas Linux Fest"], ["tech-bloc.svg", "Tech Bloc"], ["youth-code-jam.webp", "Youth Code Jam"],
-  ["the-creative-futures.webp", "The Creative Futures"]]
-// solid badges lose their shape as white light, so these project in their own colour
-const PARTNER_COLOUR = new Set(["txlf.png", "tech-bloc.svg", "sastw.svg"])
-const LOGOS = [...GROUP_LIST.map(([f, n]) => ({ im: img("proj/groups/" + f), name: n, kind: "group", white: false })),
-               ...PARTNER_LIST.map(([f, n]) => ({ im: img("proj/partners/" + f), name: n, kind: "partner", white: !PARTNER_COLOUR.has(f) }))]
 // The Model's mascot: the Claude Code mark, as The Model's site draws it
 const CLAUDE = new Path2D("M20.998 10.949H24v3.102h-3v3.028h-1.487V20H18v-2.921h-1.487V20H15v-2.921H9V20H7.488v-2.921H6V20H4.487v-2.921H3V14.05H0V10.95h3V5h17.998v5.949zM6 10.949h1.488V8.102H6v2.847zm10.51 0H18V8.102h-1.49v2.847z")
 const LAVENDER = "#c4b5fd"
-
-// places on the stone a logo can sit: the tower faces and the centre, avoiding the openings
-const SPOTS = (() => {
-  const s = []
-  for (const x0 of [LT0, RT0]) for (const y of [415, 478, 630, 776]) for (const dx of [40, 116, 192]) s.push([x0 + dx, y])
-  for (const y of [610, 760]) for (const x of [760, 840, 1080, 1160]) s.push([x, y])
-  for (const x of [800, 880, 1040, 1120]) s.push([x, 360])
-  return s
-})()
-
-function film(frames, sec, x, y, w, tint) {
-  const f = frameOf(frames, sec); if (!f.complete || !f.width) return
-  const h = w * f.height / f.width
-  p.save(); p.globalCompositeOperation = "lighter"; p.drawImage(f, x - w / 2, y - h / 2, w, h)
-  if (tint) { p.globalCompositeOperation = "multiply"; p.fillStyle = tint; p.fillRect(x - w / 2, y - h / 2, w, h) }
-  p.restore()
-}
-function disc(im, x, y, r, a) {
-  p.save(); p.globalAlpha = a; p.fillStyle = "#121216"; p.beginPath(); p.arc(x, y, r, 0, TAU); p.fill()
-  p.strokeStyle = "rgba(255,255,255,.35)"; p.lineWidth = 2; p.stroke()
-  if (im.complete && im.width) { const s = r * 1.45, k = Math.min(s / im.width, s / im.height); p.drawImage(im, x - im.width * k / 2, y - im.height * k / 2, im.width * k, im.height * k) }
-  p.restore()
-}
-function card(im, x, y, w, h, a) {
-  p.save(); p.globalAlpha = a; p.fillStyle = "#f4f4f5"; p.beginPath(); p.roundRect(x - w / 2, y - h / 2, w, h, 10); p.fill()
-  if (im.complete && im.width) { const k = Math.min((w - 20) / im.width, (h - 16) / im.height); p.drawImage(im, x - im.width * k / 2, y - im.height * k / 2, im.width * k, im.height * k) }
-  p.restore()
-}
 
 // --- the light, locked to the stone (after the Saga's way of mapping San Fernando): a grid on each tower
 // face that follows the coursing, chevrons down the buttresses, the rose window and the oculi lit on the beat.
@@ -377,33 +334,6 @@ const FILMS = [
     p.restore()
   } },
 ]
-// The community, on the towers: the groups one at a time on the left tower, the partners on the right,
-// each in its own colours in a soft pool of shadow (no border, no label), turning over through the loop.
-// The community, in the belfries: the groups one at a time in the left tower's, the partners in the right's,
-// lit like signs in the dark openings. No border, no label; they turn over through the loop.
-function belfryLogo(L, cx, cy, a) {
-  const im = L.im; if (a <= 0 || !im.complete || !im.width) return
-  ctx.save(); ctx.globalAlpha = a
-  const k = Math.min(104 / im.width, 120 / im.height)
-  ctx.shadowColor = "rgba(255,255,255,.35)"; ctx.shadowBlur = 18
-  ctx.drawImage(im, cx - im.width * k / 2, cy - im.height * k / 2, im.width * k, im.height * k)
-  ctx.restore()
-}
-// Groups and partners together, shuffled once (seeded, so the order is the same every run), shown two
-// at a time, one in each belfry. Every logo gets the same time; the whole list runs twice per loop.
-const ROLL = (() => {
-  const o = LOGOS.slice(); let sd = 2101
-  const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647
-  for (let i = o.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [o[i], o[j]] = [o[j], o[i]] }
-  return o
-})()
-function community(t) {
-  const c = t % fm.T, pairs = Math.ceil(ROLL.length / 2), each = fm.T / (pairs * 2)
-  const k = Math.floor(c / each), local = c - k * each, pair = k % pairs
-  const a = clamp01(local / .7) * clamp01((each - local) / .7)
-  BELFRY.forEach(([bx, by, bw, bh], side) => { const L = ROLL[(pair * 2 + side) % ROLL.length]; belfryLogo(L, bx + bw / 2, by + bh * .5, a) })
-}
-const FADE_S = 1.2
 const SCHEDULE = (() => {                                 // the films fill the loop, stretched or squeezed to its length
   const total = FILMS.reduce((n, f) => n + f.len, 0), k = fm.T / total
   let at = 0; return FILMS.map(f => { const s = { at, len: f.len * k, draw: f.draw, framed: f.framed }; at += f.len * k; return s })
@@ -435,31 +365,8 @@ function projection(t) {
   return sp.getImageData(0, 0, COLS, ROWS).data
 }
 
-// --- the sky: a slow searchlight from each tower, teal and orange, swinging out and crossing
-function beams(t) {
-  const swing = Math.sin(TAU * t / LT), lift = .85 + .3 * fm.pulseAt(t)
-  for (const [x, c, side] of [[(LT0 + LT1) / 2, TEAL, -1], [(RT0 + RT1) / 2, ORANGE, 1]]) {
-    const a = -Math.PI / 2 + side * (.62 + .3 * swing), len = 1300, spread = .11
-    ctx.save(); ctx.globalCompositeOperation = "lighter"
-    const gr = ctx.createLinearGradient(x, TOP, x + Math.cos(a) * len, TOP + Math.sin(a) * len)
-    gr.addColorStop(0, fm.rgba(c, .42 * lift)); gr.addColorStop(1, fm.rgba(c, 0))
-    ctx.fillStyle = gr; ctx.beginPath(); ctx.moveTo(x - 8, TOP - 90)
-    ctx.lineTo(x + Math.cos(a - spread) * len, TOP + Math.sin(a - spread) * len); ctx.lineTo(x + Math.cos(a + spread) * len, TOP + Math.sin(a + spread) * len)
-    ctx.lineTo(x + 8, TOP - 90); ctx.fill(); ctx.restore()
-  }
-}
-
 // --- the plaza's people -------------------------------------------------------------------------
-const PENGUIN = img("penguin.png"), PYSA = img("pysa-mascot-full.webp")
-// agents: [tint, number, crossings per minute, phase, direction]
-const WALKERS = [[TEAL, "07", 1, .1, 1], [ORANGE, "42", 1, .6, -1]]   // two, slow: the projection is the show
-function walkers(t) {
-  for (const [tint, n, k, ph, dir] of WALKERS) {
-    const u = ((t / LT) * k + ph) % 1, span = W + 300
-    const x = dir > 0 ? -150 + u * span : W + 150 - u * span
-    drawPlush(ctx, { x, y: 1000, s: 1.05, tint, number: "", t, stride: TAU * 1.8 * t, run: 1, look: dir * 4, mouth: .25, seed: +n })
-  }
-}
+const PENGUIN = img("penguin.png")
 // The audience: agents in folding chairs on the plaza, backs to us, watching the show, as people do on Main
 // Plaza. They nod to the beat and throw their arms up when a new film starts. The centre stays clear.
 // [x, tint or null for an empty chair, seed]
@@ -510,19 +417,6 @@ function bicycle(t) {
     ctx.imageSmoothingEnabled = false; ctx.drawImage(PENGUIN, x - 28 - w / 2, y - R - 54 - h + bob, w, h); ctx.imageSmoothingEnabled = true }
   ctx.restore()
 }
-// Linux San Antonio's penguin, standing on the left, nodding a little to the music
-function penguin(t) {
-  if (!PENGUIN.complete || !PENGUIN.width) return
-  const h = 140, w = h * PENGUIN.width / PENGUIN.height, nod = (.5 - .5 * Math.cos(TAU * t / LT * 38)) * 3
-  ctx.save(); ctx.translate(250, 998); ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.beginPath(); ctx.ellipse(0, 0, w * .4, 8, 0, 0, TAU); ctx.fill()
-  ctx.imageSmoothingEnabled = false; ctx.drawImage(PENGUIN, -w / 2, -h + nod, w, h); ctx.imageSmoothingEnabled = true; ctx.restore()
-}
-function mascot(t) {
-  if (!PYSA.complete || !PYSA.width) return
-  const h = 190, w = h * PYSA.width / PYSA.height, sway = Math.sin(TAU * t / LT * 30) * 1.5   // the agents' and the penguin's height
-  ctx.save(); ctx.translate(1700, 998); ctx.rotate(sway * .004); ctx.drawImage(PYSA, -w / 2, -h, w, h); ctx.restore()
-}
-
 let MARK_AT = null
 function render(t) {
   paint(t)
@@ -551,9 +445,8 @@ function render(t) {
     for (const x of [330, 1560]) glow(x + 5, 698, 120, 90, "rgba(255,230,180,.4)")
     const k = (60 * COLS + 80) * 4; glow(960, GROUND + 50, 760, 90, `rgba(${PJ[k]},${PJ[k + 1]},${PJ[k + 2]},.4)`)   // spill on the plaza
   })
-  // community(t) — the belfry logos, retired: they pulled the eye off the films
   bicycle(t)
-  audience(t)                                   // walkers(t) retired: the agents sit and watch now
+  audience(t)
   footer(t)
 }
 fm.start(render, [...waits, fm.loadIcons(["cloud"]), document.fonts.load('900 40px "Geist"')])
