@@ -27,6 +27,12 @@
 # The video is copied, not re-encoded (render.cjs made it stream-ready), so a small
 # machine can run this.
 set -euo pipefail
+# On a Mac, keep it awake for the whole session: macOS idle sleep pauses ffmpeg, and YouTube drops a
+# stream that goes quiet (the first night mix died 19 minutes in, at the Mac's 1-minute sleep timer).
+# caffeinate -i blocks idle sleep only; the display can still turn off. Closing a laptop's lid still sleeps it.
+if [ "$(uname)" = Darwin ] && [ -z "${DEVSA_FM_AWAKE:-}" ] && command -v caffeinate >/dev/null; then
+  DEVSA_FM_AWAKE=1 exec caffeinate -i "$0" "$@"
+fi
 cd "$(dirname "$0")"
 shopt -s nullglob nocaseglob
 
