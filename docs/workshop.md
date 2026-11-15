@@ -8,7 +8,7 @@ because each person pairs with a coding agent and the starter explains itself.
 
 - Pick five or six places from the [`good first scene` issues](https://github.com/devsanantonio/devsa-fm/labels/good%20first%20scene),
   and bring a photo of each. Tracing a real shape is what makes a scene read as San Antonio.
-- Check the [playground](https://devsanantonio.github.io/devsa-fm/) loads on the room's Wi-Fi: it's the
+- Check that [devsa.community/fm](https://www.devsa.community/fm) loads on the room's Wi-Fi: it's the
   fallback for anyone whose laptop won't install Node.
 - Have the night mix playing on the screen as people arrive.
 

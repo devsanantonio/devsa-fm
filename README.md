@@ -10,7 +10,7 @@ with DEVSA's agents, the Linux San Antonio penguin and the PySanAntonio mascot l
 It's built by [DEVSA](https://devsa.community), and **you can build a scene for it.** Every scene is one
 HTML file that draws on a canvas: no framework, no build step.
 
-**▶ [Open the scenes in your browser](https://devsanantonio.github.io/devsa-fm/)**: nothing to install. Watch the lotería, then open the starter.
+**▶ [Watch the scenes at devsa.community/fm](https://www.devsa.community/fm)**: live in your browser, nothing to install.
 
 → **[Contributing guide](CONTRIBUTING.md)**: run it, make a scene, open a pull request.
 
@@ -26,9 +26,9 @@ The night mix, in the order it plays. A scene from the community that joins it i
 
 | | | | |
 |:-:|:-:|:-:|:-:|
-| [![The night bus](.github/media/commute-night.jpg)](https://devsanantonio.github.io/devsa-fm/play.html?s=commute-night) | [![Under the bridge](.github/media/fish.jpg)](https://devsanantonio.github.io/devsa-fm/play.html?s=fish) | [![The game](.github/media/court.jpg)](https://devsanantonio.github.io/devsa-fm/play.html?s=court) | [![The taco truck](.github/media/taco.jpg)](https://devsanantonio.github.io/devsa-fm/play.html?s=taco) |
+| [![The night bus](.github/media/commute-night.jpg)](https://www.devsa.community/fm?scene=commute-night) | [![Under the bridge](.github/media/fish.jpg)](https://www.devsa.community/fm?scene=fish) | [![The game](.github/media/court.jpg)](https://www.devsa.community/fm?scene=court) | [![The taco truck](.github/media/taco.jpg)](https://www.devsa.community/fm?scene=taco) |
 | **1. The night bus** · DEVSA | **2. Under the bridge** · DEVSA | **3. The game** · DEVSA | **4. The taco truck** · DEVSA |
-| [![The Rand](.github/media/rand.jpg)](https://devsanantonio.github.io/devsa-fm/play.html?s=rand) | [![Lotería at Market Square](.github/media/paseo.jpg)](https://devsanantonio.github.io/devsa-fm/play.html?s=paseo) | [![San Fernando](.github/media/cathedral.jpg)](https://devsanantonio.github.io/devsa-fm/play.html?s=cathedral) | [![The River Walk](.github/media/riverwalk.jpg)](https://devsanantonio.github.io/devsa-fm/play.html?s=riverwalk) |
+| [![The Rand](.github/media/rand.jpg)](https://www.devsa.community/fm?scene=rand) | [![Lotería at Market Square](.github/media/paseo.jpg)](https://www.devsa.community/fm?scene=paseo) | [![San Fernando](.github/media/cathedral.jpg)](https://www.devsa.community/fm?scene=cathedral) | [![The River Walk](.github/media/riverwalk.jpg)](https://www.devsa.community/fm?scene=riverwalk) |
 | **5. The Rand** · DEVSA | **6. Lotería** · DEVSA | **7. San Fernando** · DEVSA | **8. The River Walk** · DEVSA |
 
 ## All the scenes
@@ -70,7 +70,7 @@ measured beat. Songs are dealt so no two scenes in a row share one; the table is
 | `npm run check -- <scene>` | checks a scene against the contract: runs without the optional assets, same frame for the same second, no seam in the loop. Pull requests run it automatically |
 | `npm run still -- <scene> [seconds...]` | saves PNGs of a scene to `out/stills/` (for checking and pull requests) |
 | `npm run clip -- <scene> "" [track.mp3]` | a shareable MP4 and GIF in `social/clips/` (needs ffmpeg; silent without the music) |
-| `npm run site` | builds the browser playground into `_site/` (GitHub Pages publishes it from `main`) |
+| `npm run site` | builds the scenes, thumbnails and `scenes.json` into `_site/`; GitHub Pages publishes it from `main` and [devsa.community/fm](https://www.devsa.community/fm) plays it |
 | `python3 tools/beats.py track.mp3 > scene/beats-<name>.json` | measures a song's tempo and first beat, to sync a scene to it |
 
 `CHROME=/path/to/chrome` if Chrome isn't the macOS app.
