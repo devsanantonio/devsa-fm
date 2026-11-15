@@ -14,7 +14,7 @@ JavaScript and draw on a canvas, you can make a scene that airs.
 
 ## Get it running
 
-To look first, open [devsa.community/fm](https://www.devsa.community/fm): every scene on air, live in the browser.
+To look first, click any still in the [README](README.md#on-air): each opens its scene live in the browser.
 
 You need [Node.js](https://nodejs.org) 18+ and Google Chrome. ffmpeg is only needed for clips.
 

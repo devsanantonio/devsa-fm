@@ -1,9 +1,8 @@
-// Builds what devsa.community/fm plays: every scene, its thumbnail, and the list of them. GitHub Pages
-// publishes it (.github/workflows/pages.yml), and devsa.community serves it under /fm/scene/, /fm/thumbs/
-// and /fm/scenes.json, so a merged scene shows up on the site without touching the site's code.
+// Builds the published copy of the scenes: every scene, its thumbnail, and the list of them. GitHub Pages
+// publishes it (.github/workflows/pages.yml): the README's stills open the scenes from there, live.
 // It copies scene/ (without the City's icons and the logos, which aren't public), takes a thumbnail of each
-// scene in tools/scenes.json, and writes scenes.json. index.html and play.html only forward to devsa.community,
-// so the scenes have one public address. To look at the files locally: node tools/site.cjs && npx serve _site
+// scene in tools/scenes.json, and writes scenes.json. index.html and play.html forward to devsa.community/fm,
+// which says what DEVSA FM is and where to watch it. To look at the files locally: node tools/site.cjs && npx serve _site
 // Needs Chrome: set CHROME=/path/to/chrome if it isn't the macOS app.
 const fs = require('fs'), path = require('path')
 let puppeteer
@@ -18,7 +17,7 @@ fs.cpSync(path.join(ROOT, 'scene'), path.join(OUT, 'scene'), {
 fs.mkdirSync(path.join(OUT, 'thumbs'))
 
 const SITE = 'https://www.devsa.community/fm'
-// A page that sends people to devsa.community/fm; play.html?s=<id> lands on that scene.
+// A page that sends people to devsa.community/fm (the old playground's links land there).
 const forward = (to, scene = false) => `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>DEVSA FM</title>
 <link rel="canonical" href="${to}"><meta name="robots" content="noindex">
@@ -43,7 +42,7 @@ const forward = (to, scene = false) => `<!doctype html>
   }
   fs.writeFileSync(path.join(OUT, 'scenes.json'), JSON.stringify({ scenes }, null, 2))
   fs.writeFileSync(path.join(OUT, 'index.html'), forward(SITE))
-  fs.writeFileSync(path.join(OUT, 'play.html'), forward(SITE, true))
+  fs.writeFileSync(path.join(OUT, 'play.html'), forward(SITE))
   fs.writeFileSync(path.join(OUT, '.nojekyll'), '')
   console.log('wrote', path.relative(ROOT, OUT))
 })()
