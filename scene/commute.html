@@ -1,0 +1,363 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: "Geist Mono"; font-weight: 700; src: url(fonts/GeistMono-Bold.woff2) format("woff2"); }
+  @font-face { font-family: "Geist"; font-weight: 500; src: url(fonts/Geist-Medium.woff2) format("woff2"); }
+  @font-face { font-family: "Geist"; font-weight: 900; src: url(fonts/Geist-Black.woff2) format("woff2"); }
+  html, body { margin: 0; background: #eee8db; overflow: hidden }
+  html.night, html.night body { background: #0c0c0c }
+  canvas { display: block }
+</style>
+</head>
+<body>
+<!--
+  DEVSA FM, the commute: a long city bus in the spirit of VIA's VIVA livery, with the DEVSA TV
+  stickers on its windows and devsa.community on its route sign, rolling past the City of San
+  Antonio's icons for Mission San José and the big boots. VIA's own marks are left off the bus:
+  they aren't ours to use.
+
+  One file, two times of day. By day it is dark characters on warm paper; with ?night (stream.sh's
+  commute-night) it takes the River Walk's night treatment, light characters on near-black, with
+  stars, streetlamps that light the bus as it passes, floodlit landmarks, passengers against the
+  cabin lights, headlights on the road, and a car going the other way now and then.
+  1920x1080, a seamless T-second loop: render(t) draws a frame.
+-->
+<canvas id="c" width="1920" height="1080"></canvas>
+<script>
+const NIGHT = new URLSearchParams(location.search).has("night")
+if (NIGHT) document.documentElement.classList.add("night")
+const N = (night, day) => NIGHT ? night : day          // a value for each time of day
+const T = 60, W = 1920, H = 1080, TAU = Math.PI * 2
+const TEAL = "#00b2a9", PINK = "#ef426f", ORANGE = "#ff8200"
+const PAPER = "#eee8db", INK = [28, 26, 22]
+const ctx = document.getElementById("c").getContext("2d")
+const CELL = 12, COLS = W / CELL, ROWS = H / CELL      // 160 x 90 characters
+const RAMP = " .,:;-=+*#%@"
+
+// the scene is painted as ink density at character resolution, then each cell becomes a character
+const sc = document.createElement("canvas"); sc.width = COLS; sc.height = ROWS
+const g = sc.getContext("2d", { willReadFrequently: true })
+const gray = v => { const c = Math.round(v * 255); return `rgb(${c},${c},${c})` }
+function box(x, y, w, h, v) { g.fillStyle = gray(v); g.fillRect(x, y, w, h) }
+
+// City of San Antonio icons, inked into the scene
+const ICON_FILES = ["sanjose", "boots"]
+const ICON = {}, ICON_IMG = {}
+async function loadIcons() {
+  for (const n of ICON_FILES) {
+    let svg = await (await fetch("icons/" + n + ".svg")).text()
+    const vb = svg.match(/viewBox="([^"]+)"/)[1].split(/\s+/).map(Number)
+    ICON[n] = { vb, svg: svg.replace(/#231f20/gi, "#ffffff").replace(/stroke:\s*#000(000)?;/gi, "stroke: #ffffff;").replace(/fill:\s*#000(000)?;/gi, "fill: #ffffff;") }   // the icons come in #231f20 or #000
+  }
+}
+function icon(n, x, y, w, v) {
+  const key = n + "@" + w
+  let im = ICON_IMG[key]
+  if (!im) {
+    const { vb, svg } = ICON[n], sw = (vb[2] / w) * 1.1
+    const s2 = svg.replace(/stroke-width:\s*[^;]+;/g, "").replace(/stroke:\s*#ffffff;/g, `stroke: #ffffff; stroke-width: ${sw}px;`)
+    im = new Image(); im.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(s2); ICON_IMG[key] = im
+    return
+  }
+  if (!im.complete) return
+  const h = w * ICON[n].vb[3] / ICON[n].vb[2]
+  g.save(); g.globalAlpha = v; g.drawImage(im, x, y, w, h); g.restore()
+}
+function onGround(n, x, base, w, v) { if (!ICON[n]) return; icon(n, x, base - w * ICON[n].vb[3] / ICON[n].vb[2], w, v) }
+
+const HORIZON = 52, ROAD_TOP = 60, ROAD_BOT = 76
+const LAMP = 40                                    // streetlamps 40 cells apart: 15 pass a loop
+// where each lamp's light is, in pixels, at time t (shared by the ASCII lamps and their light on the bus)
+const lampsAt = t => { const loff = (t * SPEED) % LAMP, xs = []; for (let x = -LAMP; x < COLS + LAMP; x += LAMP) xs.push((x - loff + 23.5) * CELL); return xs }
+// the road scrolls under a bus that holds its place: SPEED cells a second, a whole
+// number of dash periods a loop, so the loop closes
+const DASH = 10, SPEED = DASH * 6 / 60 * 10       // 10 cells/s: 60 dash periods a loop
+
+function paint(t) {
+  box(0, 0, COLS, ROWS, N(.03, 0))
+  // stars, twinkling in whole cycles a loop
+  if (NIGHT) { let st = 5; const sr = () => (st = (st * 16807) % 2147483647) / 2147483647
+  for (let i = 0; i < 70; i++) {
+    const x = Math.floor(sr() * COLS), y = Math.floor(sr() * 36), k = 1 + Math.floor(sr() * 4), ph = sr() * TAU
+    box(x, y, 1, 1, .3 + .3 * sr() + .18 * Math.sin(TAU * k * t / T + ph))
+  } }
+
+  // clouds drifting right, a full screen width a loop
+  for (const [cx, cy, w, h] of [[18, 10, 22, 4], [70, 6, 16, 3], [112, 14, 26, 4], [150, 8, 14, 3]]) {
+    const x = ((cx + (t / T) * (COLS + 40)) % (COLS + 40)) - 20
+    for (let k = 0; k < 4; k++) {
+      g.fillStyle = gray(N(.1, .16)); g.beginPath()
+      g.ellipse(x + (k - 1.5) * w * .26, cy + (k % 2 ? -1 : 0), w * .32, h * (k % 2 ? .75 : .55), 0, 0, TAU); g.fill()
+    }
+    box(x - w * .5, cy + h * .45, w, 1, N(.13, .22))
+  }
+
+  // far hills
+  g.fillStyle = gray(.1); g.beginPath(); g.moveTo(0, HORIZON)
+  for (let x = 0; x <= COLS; x += 2) g.lineTo(x, HORIZON - 3 - 2.5 * Math.sin(x * .07) - 1.5 * Math.sin(x * .19 + 1))
+  g.lineTo(COLS, HORIZON); g.closePath(); g.fill()
+
+  // the two landmarks: Mission San José on the left, the boots on the right
+  onGround("sanjose", 14, HORIZON + 1, 34, .95)
+  onGround("boots", 116, HORIZON + 1, 26, .95)
+  // trees between San José and the boots: live oak and cypress crowns, soft clumps of ink
+  const tree = (x, h, w, seed) => {
+    const top = HORIZON - h
+    box(x, top + h * .5, 1, h * .5, N(.22, .55))                          // trunk
+    let r0 = seed; const r = () => (r0 = (r0 * 16807) % 2147483647) / 2147483647
+    for (let i = 0; i < 40; i++) {
+      const v = r(), yy = top + 2 + v * h * .55, spread = w * (.45 + .55 * Math.sin(Math.PI * Math.min(1, v * 1.15)))
+      g.fillStyle = gray(N(.22 + .14 * r(), .3 + .25 * r())); g.beginPath()
+      g.ellipse(x + (r() - .5) * 2 * spread, yy, 2.2 + r() * 1.6, 1.6 + r() * 1.2, 0, 0, TAU); g.fill()
+    }
+  }
+  for (const [x, h, w, sd] of [[60, 16, 6, 3], [70, 22, 8, 7], [82, 14, 5, 11], [92, 19, 7, 13], [103, 15, 6, 17]]) tree(x, h, w, sd)
+
+  // the shoulder, then the road with its dashed centre line scrolling left
+  box(0, HORIZON, COLS, ROAD_TOP - HORIZON, N(.1, .12))
+  for (let x = 0; x < COLS; x += 3) box(x + ((x * 7) % 2), HORIZON + 2 + (x % 5), 1, 1, N(.2, .3))
+  box(0, ROAD_TOP, COLS, ROAD_BOT - ROAD_TOP, N(.16, .5))
+  box(0, ROAD_TOP, COLS, 1, N(.4, .75)); box(0, ROAD_BOT - 1, COLS, 1, N(.4, .75))
+  const off = (t * SPEED) % DASH
+  for (let x = -DASH; x < COLS + DASH; x += DASH) box(x - off, (ROAD_TOP + ROAD_BOT) / 2, 5, 1, N(.6, .08))
+  box(0, ROAD_BOT, COLS, ROWS - ROAD_BOT, N(.06, .08))
+  if (!NIGHT) return
+
+  // streetlamps on the far side, passing with the road (40 cells apart: 15 a loop), each
+  // with a pool of light on the asphalt
+  const loff = (t * SPEED) % LAMP
+  g.save(); g.globalCompositeOperation = "lighten"
+  for (let x = -LAMP; x < COLS + LAMP; x += LAMP) {
+    const px = Math.round(x - loff + 20)
+    const pool = g.createRadialGradient(px + 3, ROAD_TOP + 3, 0, px + 3, ROAD_TOP + 3, 14)
+    pool.addColorStop(0, gray(.58)); pool.addColorStop(1, gray(.16))
+    g.fillStyle = pool; g.beginPath(); g.ellipse(px + 3, ROAD_TOP + 4, 15, 6, 0, 0, TAU); g.fill()
+  }
+  g.restore()
+  for (let x = -LAMP; x < COLS + LAMP; x += LAMP) {
+    const px = Math.round(x - loff + 20)
+    box(px, HORIZON - 8, 1, ROAD_TOP - HORIZON + 8, .38)          // the post
+    box(px, HORIZON - 8, 4, 1, .38)                               // the arm
+    box(px + 2, HORIZON - 7, 3, 1, 1)                             // the lamp
+  }
+
+  // the headlights, thrown on the road ahead of the bus
+  g.save(); g.globalCompositeOperation = "lighten"
+  const beam = g.createLinearGradient(112, 0, 160, 0)
+  beam.addColorStop(0, gray(.6)); beam.addColorStop(1, gray(.12))
+  g.fillStyle = beam; g.beginPath(); g.moveTo(112, 68); g.lineTo(160, 62); g.lineTo(160, 76); g.lineTo(112, 72); g.closePath(); g.fill()
+  g.restore()
+
+
+}
+
+
+// the bus: a long, low city bus in the spirit of VIA's VIVA livery (slanted blocks of
+// colour, a dark window band the full length), driving right, with the DEVSA ad in
+// the band where VIVA puts its wordmark. VIA's and VIVA's own marks are left off.
+// the ad: the DEVSA TV sticker set (~/Downloads/devsa-tv-graphics/sticker-style), exported
+// with its die-cut edges and glare, stuck across the windows like a laptop lid:
+// [file, centre x along the bus, height, tilt]
+// every other window pane, rear to front: [file, tilt]
+const WINDOW_STICKERS = [["sticker-hello", -.04], ["devsa-window-sticker", -.02], ["sticker-love", .04]]
+  .map(([f, tilt]) => { const im = new Image(); im.src = `${f}.png`; return { im, tilt } })
+function rr(x, y, w, h, r) {
+  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r)
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath()
+}
+const cycles = k => Math.max(1, Math.round(k * T / 60))
+// the passengers: [pane, where in the pane 0..1, standing, how often they sway]
+const PASSENGERS = [[0, .22, 0, 7], [0, .78, 1, 5], [1, .3, 0, 6], [1, .72, 1, 4], [2, .2, 0, 8], [2, .82, 0, 5], [3, .4, 1, 6], [3, .8, 0, 7], [4, .25, 0, 5], [4, .7, 1, 6]]
+// rear (left) to front (right): maroon, red, orange, white, lime, green, turquoise, teal
+const LIVERY = ["#7d1d34", "#d8383d", "#f28a22", "#f4f4f0", "#c9d43a", "#3aae4a", "#2bb0b4", "#14888a"]
+function bus(t) {
+  const L = 760, Hb = 210, x0 = 580, base = 872
+  ctx.textAlign = "left"
+  const bob = Math.sin(TAU * 30 * t / T) * 1.4 + Math.sin(TAU * 11 * t / T) * 1
+  const y0 = base - Hb + bob
+  // shadow
+  ctx.fillStyle = "rgba(0,0,0,.18)"; ctx.beginPath(); ctx.ellipse(x0 + L / 2, base + 24, L * .52, 13, 0, 0, TAU); ctx.fill()
+
+  // the body, filled with slanted colour blocks
+  ctx.save()
+  rr(x0, y0, L, Hb, 18); ctx.clip()
+  const seg = L / LIVERY.length, lean = 70
+  LIVERY.forEach((c, i) => {
+    const xa = x0 + i * seg - lean / 2, xb = xa + seg + 2
+    ctx.fillStyle = c; ctx.beginPath()
+    ctx.moveTo(xa + lean, y0); ctx.lineTo(xb + lean, y0); ctx.lineTo(xb - lean * .2, y0 + Hb); ctx.lineTo(xa - lean * .2, y0 + Hb); ctx.closePath(); ctx.fill()
+  })
+  ctx.fillStyle = LIVERY[0]; ctx.fillRect(x0, y0, seg * .4, Hb)                    // rear corner
+  ctx.fillStyle = LIVERY[LIVERY.length - 1]; ctx.fillRect(x0 + L - 60, y0, 60, Hb)  // the nose, solid teal
+  if (NIGHT) { ctx.fillStyle = "rgba(6,8,18,.32)"; ctx.fillRect(x0, y0, L, Hb) }   // night on the paint
+  // the dark window band, nearly the full length
+  const by = y0 + 34, bh = 78, bandW = L - 120
+  if (NIGHT) {                                                          // the cabin lights on behind the glass
+    const cabin = ctx.createLinearGradient(0, by, 0, by + bh)
+    cabin.addColorStop(0, "#8a7a58"); cabin.addColorStop(1, "#4a4232"); ctx.fillStyle = cabin
+  } else ctx.fillStyle = "#262a30"
+  ctx.fillRect(x0 + 40, by, bandW, bh)
+  // passengers, seated and standing, behind the glass (and the stickers): silhouettes against
+  // the cabin light at night, a shade lighter than the dark glass by day
+  ctx.fillStyle = N("rgba(26,20,14,.85)", "rgba(70,76,84,.9)")
+  for (const [pane, at, stand, k] of PASSENGERS) {
+    const px = x0 + 40 + (pane + at) * bandW / 5, hy = by + (stand ? 24 : 38) + Math.sin(TAU * cycles(k) * t / T + pane * 2 + at * 5) * 1.2
+    ctx.beginPath(); ctx.arc(px, hy, 10, 0, TAU); ctx.fill()
+    ctx.beginPath(); ctx.ellipse(px, hy + 30, 21, 17, 0, Math.PI, 0); ctx.fill(); ctx.fillRect(px - 21, hy + 30, 42, by + bh - hy - 30)
+  }
+  // the windshield, wrapping the nose, and the driver
+  ctx.fillStyle = "#262a30"; rr(x0 + L - 70, y0 + 22, 58, Hb - 70, 12); ctx.fill()
+  ctx.save(); rr(x0 + L - 70, y0 + 22, 58, Hb - 70, 12); ctx.clip()
+  ctx.fillStyle = N("rgba(10,10,12,.9)", "rgba(70,76,84,.9)"); ctx.beginPath(); ctx.arc(x0 + L - 50, y0 + 62, 10, 0, TAU); ctx.fill()
+  ctx.beginPath(); ctx.ellipse(x0 + L - 50, y0 + 92, 20, 16, 0, Math.PI, 0); ctx.fill(); ctx.fillRect(x0 + L - 70, y0 + 92, 40, 40)
+  ctx.restore()
+  // the rear engine grille
+  ctx.fillStyle = "#c9c9c4"; ctx.fillRect(x0 + 14, y0 + Hb - 82, 64, 46)
+  ctx.strokeStyle = "#8e8e88"; ctx.lineWidth = 2
+  for (let k = 1; k < 6; k++) { ctx.beginPath(); ctx.moveTo(x0 + 14, y0 + Hb - 82 + k * 7.6); ctx.lineTo(x0 + 78, y0 + Hb - 82 + k * 7.6); ctx.stroke() }
+  ctx.restore()
+
+  // the ad: the DEVSA alt logo as a die-cut sticker across the windows
+  // a sticker in each window pane, fitted inside it and flat on the glass (no lift, no shadow)
+  const panes = 5, paneW = bandW / panes
+  const stick = (w, cx, cy, maxW, maxH) => {
+    if (!w.im.complete || !w.im.width) return
+    const k = Math.min(maxW / w.im.width, maxH / w.im.height), sw = w.im.width * k, sh = w.im.height * k
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate(w.tilt); ctx.drawImage(w.im, -sw / 2, -sh / 2, sw, sh); ctx.restore()
+  }
+  WINDOW_STICKERS.forEach((w, i) => stick(w, x0 + 40 + (2 * i + .5) * paneW, by + bh / 2, paneW - 24, bh - 12))
+  // the glass: a soft reflection sweeping across the windows, over the stickers
+  ctx.save(); ctx.beginPath(); ctx.rect(x0 + 40, by, bandW, bh); ctx.clip()
+  for (const [x, w, a] of [[x0 + 110, 110, .14], [x0 + 270, 40, .1], [x0 + 450, 130, .12], [x0 + 640, 50, .1]]) {
+    ctx.fillStyle = `rgba(255,255,255,${a * N(.5, 1)})`; ctx.beginPath()
+    ctx.moveTo(x, by - 20); ctx.lineTo(x + w, by - 20); ctx.lineTo(x + w - 110, y0 + Hb); ctx.lineTo(x - 110, y0 + Hb); ctx.closePath(); ctx.fill()
+  }
+  if (!NIGHT) { ctx.fillStyle = "rgba(255,255,255,.06)"; ctx.fillRect(x0 + 40, by, bandW, bh * .35) }   // the sky in the top of the glass
+  ctx.restore()
+  // at night, each streetlamp lights the bus as it passes: a wash sliding along the paint and a
+  // glint running across the glass
+  if (NIGHT) for (const lx of lampsAt(t)) {
+    if (lx < x0 - 300 || lx > x0 + L + 300) continue
+    ctx.save(); ctx.globalCompositeOperation = "lighter"
+    rr(x0, y0, L, Hb, 18); ctx.clip()
+    const wash = ctx.createRadialGradient(lx, y0 - 60, 0, lx, y0 - 60, 300)
+    wash.addColorStop(0, "rgba(255,226,180,.26)"); wash.addColorStop(1, "rgba(255,226,180,0)")
+    ctx.fillStyle = wash; ctx.fillRect(x0, y0, L, Hb)
+    ctx.beginPath(); ctx.rect(x0 + 40, by, bandW, bh); ctx.rect(x0 + L - 70, y0 + 22, 58, Hb - 70); ctx.clip()
+    const gx = lx - 20, glint = ctx.createLinearGradient(gx - 26, 0, gx + 26, 0)
+    glint.addColorStop(0, "rgba(255,240,215,0)"); glint.addColorStop(.5, "rgba(255,240,215,.4)"); glint.addColorStop(1, "rgba(255,240,215,0)")
+    ctx.fillStyle = glint; ctx.beginPath(); ctx.moveTo(gx - 10, by); ctx.lineTo(gx + 40, by); ctx.lineTo(gx + 10, by + bh); ctx.lineTo(gx - 40, by + bh); ctx.closePath(); ctx.fill()
+    ctx.restore()
+  }
+  // the frames, over the glass: the panes read as panes again
+  ctx.strokeStyle = "#1b1e22"; ctx.lineWidth = 4
+  for (let k2 = 1; k2 < panes; k2++) { const x = x0 + 40 + k2 * paneW; ctx.beginPath(); ctx.moveTo(x, by); ctx.lineTo(x, by + bh); ctx.stroke() }
+  // the route sign above the windshield, in amber LEDs: "devsa.community" and "DEVSA FM" in turn,
+  // each scrolling in, holding, and scrolling out (10 s each, so the loop closes on the first)
+  const sx = x0 + L - 330, sw2 = 250
+  ctx.fillStyle = "#111"; rr(sx, y0 + 7, sw2, 20, 4); ctx.fill()
+  const c = t % 10, msg = ["devsa.community", "DEVSA FM"][Math.floor(t / 10) % 2]
+  const tx = sx + 14 + (c < 1 ? (1 - c) * sw2 : c > 8.6 ? -(c - 8.6) * (sw2 + 40) : 0)
+  ctx.save(); ctx.beginPath(); ctx.rect(sx + 4, y0 + 7, sw2 - 8, 20); ctx.clip()
+  ctx.fillStyle = "#ffb43a"; ctx.font = '700 14px "Geist Mono"'; ctx.textBaseline = "middle"; ctx.letterSpacing = msg === "DEVSA FM" ? "3px" : "0px"
+  ctx.fillText(msg, tx, y0 + 17); ctx.letterSpacing = "0px"; ctx.restore()
+  // outline, headlight, tail light
+  ctx.lineWidth = 3; ctx.strokeStyle = "#1c1c1c"; rr(x0, y0, L, Hb, 18); ctx.stroke()
+  ctx.fillStyle = "#ffe08a"; ctx.beginPath(); ctx.ellipse(x0 + L - 8, y0 + Hb - 44, 6, 11, 0, 0, TAU); ctx.fill()
+  ctx.fillStyle = "#ff4a3d"; ctx.fillRect(x0 + 3, y0 + 40, 7, 34)
+  const glow = (x, y, r, c) => { const gr = ctx.createRadialGradient(x, y, 0, x, y, r)
+    gr.addColorStop(0, c); gr.addColorStop(1, "rgba(0,0,0,0)"); ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill() }
+  if (NIGHT) { ctx.save(); ctx.globalCompositeOperation = "lighter"
+  glow(x0 + L - 6, y0 + Hb - 44, 60, "rgba(255,224,138,.45)")
+  glow(x0 + 6, y0 + 57, 40, "rgba(255,74,61,.35)")
+  glow(x0 + L - 205, y0 + 17, 150, "rgba(255,180,58,.08)")             // the route sign's amber
+  ctx.restore() }
+
+  // wheels under black arches, hubs turning with the road
+  for (const wx of [x0 + 170, x0 + L - 190]) {
+    const wy = base, R = 40
+    ctx.fillStyle = "#1c1c1c"; ctx.beginPath(); ctx.arc(wx, wy, R + 8, Math.PI, 0); ctx.fill()
+    ctx.fillStyle = "#151515"; ctx.beginPath(); ctx.arc(wx, wy, R, 0, TAU); ctx.fill()
+    ctx.fillStyle = "#d8d8d4"; ctx.beginPath(); ctx.arc(wx, wy, R * .56, 0, TAU); ctx.fill()
+    ctx.save(); ctx.translate(wx, wy); ctx.rotate(t * SPEED * CELL / R)
+    ctx.fillStyle = "#8e8e88"
+    for (let k = 0; k < 8; k++) { ctx.rotate(TAU / 8); ctx.beginPath(); ctx.arc(R * .36, 0, 3.2, 0, TAU); ctx.fill() }
+    ctx.fillStyle = "#555"; ctx.beginPath(); ctx.arc(0, 0, 6, 0, TAU); ctx.fill()
+    ctx.restore()
+  }
+}
+
+// warm floodlights on Mission San José and the boots: a wash over each, and beams from the ground
+function floodlights(t) {
+  ctx.save(); ctx.globalCompositeOperation = "lighter"
+  for (const [cx, cy, rx, ry, beams] of [[372, 520, 280, 170, [250, 372, 494]], [1548, 540, 210, 160, [1470, 1630]]]) {
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(1, ry / rx)
+    const w = ctx.createRadialGradient(0, 0, 0, 0, 0, rx); w.addColorStop(0, "rgba(255,188,110,.2)"); w.addColorStop(1, "rgba(255,188,110,0)")
+    ctx.fillStyle = w; ctx.beginPath(); ctx.arc(0, 0, rx, 0, TAU); ctx.fill(); ctx.restore()
+    for (const bx of beams) {
+      const g2 = ctx.createLinearGradient(0, 640, 0, 380); g2.addColorStop(0, "rgba(255,200,130,.09)"); g2.addColorStop(1, "rgba(255,200,130,0)")
+      ctx.fillStyle = g2; ctx.beginPath(); ctx.moveTo(bx - 6, 640); ctx.lineTo(bx + 6, 640); ctx.lineTo(bx + 60, 400); ctx.lineTo(bx - 60, 400); ctx.closePath(); ctx.fill()
+      ctx.fillStyle = "rgba(255,220,170,.7)"; ctx.fillRect(bx - 5, 634, 10, 5)            // the fixture
+    }
+  }
+  ctx.restore()
+}
+
+// a car in the far lane, going the other way, three times a loop: its headlights sweep the road ahead
+function oncoming(t) {
+  const u = (t % 20) / 3.6; if (u >= 1) return
+  const x = 2080 - u * 2480, y = 784                                 // its front bumper, heading left
+  ctx.save(); ctx.globalCompositeOperation = "lighter"
+  const beam = ctx.createLinearGradient(x, 0, x - 520, 0)
+  beam.addColorStop(0, "rgba(255,240,200,.35)"); beam.addColorStop(1, "rgba(255,240,200,0)")
+  ctx.fillStyle = beam; ctx.beginPath(); ctx.moveTo(x, y - 18); ctx.lineTo(x - 520, y - 40); ctx.lineTo(x - 520, y + 26); ctx.lineTo(x, y - 4); ctx.closePath(); ctx.fill()
+  ctx.restore()
+  ctx.fillStyle = "#15171b"; rr(x, y - 34, 180, 30, 8); ctx.fill(); rr(x + 40, y - 58, 96, 28, 10); ctx.fill()
+  ctx.fillStyle = "rgba(120,140,170,.35)"; rr(x + 50, y - 53, 76, 18, 6); ctx.fill()           // its windows, catching the light
+  ctx.fillStyle = "#fff4d6"; ctx.fillRect(x - 2, y - 26, 8, 8)                                // headlight
+  ctx.fillStyle = "#ff3b30"; ctx.fillRect(x + 176, y - 26, 6, 8)                              // tail light
+  ctx.fillStyle = "#0b0c0e"; ctx.beginPath(); ctx.arc(x + 40, y - 4, 13, 0, TAU); ctx.arc(x + 142, y - 4, 13, 0, TAU); ctx.fill()
+}
+
+function render(t) {
+  t = ((t % T) + T) % T
+  paint(t)
+  const d = g.getImageData(0, 0, COLS, ROWS).data
+  ctx.fillStyle = N("#0c0c0c", PAPER); ctx.fillRect(0, 0, W, H)
+  ctx.font = `700 ${CELL + 1}px "Geist Mono"`; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    const v = d[(y * COLS + x) * 4] / 255
+    const ch = RAMP[Math.min(RAMP.length - 1, Math.floor(v * RAMP.length))]
+    if (ch === " ") continue
+    ctx.fillStyle = NIGHT ? `rgba(235,235,235,${(.25 + v * .75).toFixed(2)})` : `rgba(${INK.join(",")},${(.3 + v * .7).toFixed(2)})`
+    ctx.fillText(ch, x * CELL + CELL / 2, y * CELL + CELL / 2 + 1)
+  }
+  if (NIGHT) { floodlights(t); oncoming(t) }
+  bus(t)
+
+  // footer: who this is, and the music credit
+  const cr = window.CREDITS && window.CREDITS.length ? window.CREDITS : ['"Tejano Lofi" by Patrick · made with Suno']
+  const line = cr[Math.floor(t / 15) % cr.length]
+  ctx.textAlign = "right"; ctx.textBaseline = "alphabetic"
+  ctx.font = '500 20px "Geist"'; ctx.fillStyle = N("rgba(255,255,255,0.75)", "rgba(28,26,22,.8)")
+  ctx.fillText("♪  " + line, W - 60, H - 52)
+  ctx.textAlign = "left"; ctx.font = '700 22px "Geist Mono"'; ctx.fillStyle = N("rgba(255,255,255,0.8)", "rgba(28,26,22,.85)")
+  ctx.letterSpacing = "3px"; ctx.fillText("DEVSA FM  ·  devsa.community", 60, H - 52); ctx.letterSpacing = "0px"
+  const tw = 46
+  ;[TEAL, PINK, ORANGE].forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(60 + i * (tw + 6), H - 40, tw, 6) })
+}
+
+window.render = render
+window.ready = Promise.all([document.fonts.load('700 20px "Geist Mono"'), document.fonts.load('500 20px "Geist"'), document.fonts.load('900 20px "Geist"'), loadIcons(),
+  ...WINDOW_STICKERS.map((w) => w.im).map(i => i.complete ? 0 : new Promise(r => { i.onload = r; i.onerror = r }))])
+  .then(() => { paint(0); return new Promise(r => setTimeout(r, 300)) })
+window.ready.then(() => {
+  if (new URLSearchParams(location.search).has("still")) return render(8)
+  const t0 = performance.now()
+  ;(function loop() { render((performance.now() - t0) / 1000); requestAnimationFrame(loop) })()
+})
+</script>
+</body>
+</html>

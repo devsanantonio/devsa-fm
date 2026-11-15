@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!--
+  DEVSA FM, the Instagram post: 1080x1350. The >FM radio mark, a headline, the six scenes in a
+  grid (real frames), and where to watch. No "DEVSA" wordmark beside the mark.
+  Render with: node shot.cjs  (writes devsa-fm-instagram-1080x1350.png)
+-->
+<style>
+  @font-face { font-family: "Geist Mono"; font-weight: 700; src: url(../scene/fonts/GeistMono-Bold.woff2) format("woff2"); }
+  @font-face { font-family: "Geist"; font-weight: 500; src: url(../scene/fonts/Geist-Medium.woff2) format("woff2"); }
+  @font-face { font-family: "Geist"; font-weight: 900; src: url(../scene/fonts/Geist-Black.woff2) format("woff2"); }
+  html, body { margin: 0; width: 1080px; height: 1350px; overflow: hidden; background: #161616; color: #f2f2f2 }
+  .mark { position: absolute; left: 50%; top: 70px; transform: translateX(-50%); height: 370px }
+  h1 { position: absolute; left: 0; right: 0; top: 476px; margin: 0; text-align: center; font-family: "Geist"; font-weight: 900; font-size: 76px; line-height: 1.02; letter-spacing: -1.5px }
+  .sub { position: absolute; left: 0; right: 0; top: 650px; text-align: center; font-family: "Geist"; font-weight: 500; font-size: 30px; color: rgba(242,242,242,.78) }
+  .grid { position: absolute; left: 48px; top: 730px; width: 984px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px }
+  .tile { position: relative; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background-repeat: no-repeat; background-color: #0c0c0c; background-size: 118% auto }
+  .tile span { position: absolute; left: 10px; bottom: 8px; font-family: "Geist Mono"; font-weight: 700; font-size: 14px; letter-spacing: 1.5px; color: #fff; background: rgba(10,10,12,.78); padding: 4px 8px; border-radius: 5px }
+  .watch { position: absolute; left: 0; right: 0; bottom: 108px; text-align: center; font-family: "Geist Mono"; font-weight: 700; font-size: 34px; letter-spacing: 2px }
+  .watch b { color: #ffcf6a; font-weight: 700 }
+  .credit { position: absolute; left: 0; right: 0; bottom: 48px; text-align: center; font-family: "Geist"; font-weight: 500; font-size: 22px; color: rgba(242,242,242,.6) }
+</style>
+</head>
+<body>
+  <img class="mark" src="devsa-fm-mark.svg" alt="DEVSA FM">
+  <h1>A night in San Antonio,<br>in ASCII.</h1>
+  <div class="sub">Tejano lofi radio for the city's learners and builders</div>
+  <div class="grid">
+    <div class="tile" style="background-image:url(commute-21.png);background-position:50% 30%"><span>THE NIGHT BUS</span></div>
+    <div class="tile" style="background-image:url(fish-10.png);background-position:50% 20%"><span>UNDER THE BRIDGE</span></div>
+    <div class="tile" style="background-image:url(court-24.png);background-size:736px auto;background-position:-330px -200px"><span>THE GAME</span></div>
+    <div class="tile" style="background-image:url(taco-206.png);background-position:30% 40%"><span>THE TACO TRUCK</span></div>
+    <div class="tile" style="background-image:url(rand-4.995.png);background-position:50% 30%"><span>THE RAND</span></div>
+    <div class="tile" style="background-image:url(rw-26.7.png);background-position:40% 60%"><span>THE RIVER WALK</span></div>
+  </div>
+  <div class="watch">Live on YouTube <b>@devsatx</b></div>
+  <div class="credit">"Tejano Lofi" by Patrick · made with Suno</div>
+</body>
+</html>

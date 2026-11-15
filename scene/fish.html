@@ -1,0 +1,214 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: "Geist Mono"; font-weight: 700; src: url(fonts/GeistMono-Bold.woff2) format("woff2"); }
+  @font-face { font-family: "Geist"; font-weight: 500; src: url(fonts/Geist-Medium.woff2) format("woff2"); }
+  html, body { margin: 0; background: #0c0c0c; overflow: hidden }
+  canvas { display: block }
+</style>
+</head>
+<body>
+<!--
+  DEVSA FM, under the bridge: the Museum Reach of the River Walk at night, in the River Walk's
+  night style. The underside of the highway bridge in ASCII (girders running away, the pier cap,
+  lit columns), the path with its bollard lights, the river. Hanging under the deck, a school of
+  glowing sunfish, a nod to Donald Lipski's F.I.S.H. on the Museum Reach, drawn here as our own
+  fish rather than his: a wave of light rolls through them, each one's glow washing the bridge
+  above it and shimmering in the river below.
+  1920x1080, a seamless T-second loop: render(t) draws a frame.
+-->
+<canvas id="c" width="1920" height="1080"></canvas>
+<script>
+const T = 60, W = 1920, H = 1080, TAU = Math.PI * 2
+const TEAL = "#00b2a9", PINK = "#ef426f", ORANGE = "#ff8200"
+const ctx = document.getElementById("c").getContext("2d")
+const CELL = 12, COLS = W / CELL, ROWS = H / CELL      // 160 x 90 characters
+const RAMP = " .,:;-=+*#%@"
+
+const sc = document.createElement("canvas"); sc.width = COLS; sc.height = ROWS
+const g = sc.getContext("2d", { willReadFrequently: true })
+const gray = v => { const c = Math.round(Math.max(0, Math.min(1, v)) * 255); return `rgb(${c},${c},${c})` }
+function box(x, y, w, h, v) { g.fillStyle = gray(v); g.fillRect(x, y, w, h) }
+const hash = (a, b) => { const s = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return s - Math.floor(s) }
+const lerp = (a, b, p) => a + (b - a) * p
+
+// the bridge, in cells: the deck's girders run toward a vanishing point on the right
+const VP = [134, 40]
+const capY = x => 33 + x * .055                    // the pier cap's top edge, sloping away
+const groundY = x => 75 - x * .045                 // where the columns meet the ground
+const COLUMNS = [[9, 6], [27, 5.2], [45, 4.5], [61, 3.9], [75, 3.4], [88, 2.9], [99, 2.5], [108, 2.1], [116, 1.8], [122, 1.5], [127, 1.3]]
+
+function paint(t) {
+  box(0, 0, COLS, ROWS, .02)
+  // the deck's underside: the soffit, girders converging, cross beams closing up with distance
+  g.fillStyle = gray(.13); g.beginPath(); g.moveTo(0, 0); g.lineTo(COLS, 0); g.lineTo(COLS, capY(COLS)); g.lineTo(0, capY(0)); g.closePath(); g.fill()
+  g.strokeStyle = gray(.4); g.lineWidth = 1
+  for (let x = -260; x <= 420; x += 22) { g.beginPath(); g.moveTo(x, -2); g.lineTo(VP[0], VP[1]); g.stroke() }
+  g.strokeStyle = gray(.3)
+  for (let k = 1; k < 16; k++) { const y = VP[1] * (1 - Math.pow(.8, k)); g.beginPath(); g.moveTo(0, y); g.lineTo(COLS, y + k * .3); g.stroke() }
+  // behind the columns: the far bank, dark trees, the next bridge's piers
+  g.fillStyle = gray(.05); g.beginPath(); g.moveTo(0, capY(0) + 3); g.lineTo(COLS, capY(COLS) + 3); g.lineTo(COLS, groundY(COLS)); g.lineTo(0, groundY(0)); g.closePath(); g.fill()
+  for (let x = 0; x < COLS; x += 2) { const h = 6 + 5 * hash(x, 1); box(x, Math.round(groundY(x) - h), 2, Math.round(h), .09 + .04 * hash(x, 2)) }
+  // the pier cap, lit concrete
+  g.fillStyle = gray(.5); g.beginPath(); g.moveTo(0, capY(0)); g.lineTo(COLS, capY(COLS)); g.lineTo(COLS, capY(COLS) + 3); g.lineTo(0, capY(0) + 4); g.closePath(); g.fill()
+  g.strokeStyle = gray(.8); g.beginPath(); g.moveTo(0, capY(0)); g.lineTo(COLS, capY(COLS)); g.stroke()
+  // the columns: round, brightest down the middle where the uplights catch them
+  for (const [x, w] of COLUMNS) {
+    const top = Math.round(capY(x) + 3), bot = Math.round(groundY(x))
+    for (let dx = 0; dx < w; dx++) {
+      const across = Math.abs((dx + .5) / w - .5) * 2
+      box(Math.round(x - w / 2 + dx), top, 1, bot - top, .62 - .32 * across * across)
+    }
+  }
+  // the path: planting along it, bollard lights with their pools
+  box(0, Math.round(groundY(0)), COLS, 4, .07)
+  for (let x = 4; x < COLS; x += 14) {
+    const y = Math.round(groundY(x)) + 1
+    g.save(); g.globalCompositeOperation = "lighten"
+    const pool = g.createRadialGradient(x, y + 1, 0, x, y + 1, 7); pool.addColorStop(0, gray(.36)); pool.addColorStop(1, gray(.05))
+    g.fillStyle = pool; g.beginPath(); g.ellipse(x, y + 1, 7, 2.4, 0, 0, TAU); g.fill(); g.restore()
+    box(x, y - 1, 1, 2, .5); box(x, y - 2, 1, 1, 1)
+  }
+  // the river wall and the river: dark water, ripples drifting downstream
+  box(0, 79, COLS, 1, .3)
+  box(0, 80, COLS, ROWS - 80, .05)
+  for (let r = 0; r < 4; r++) { const y = 81 + r * 2.4
+    for (let k = 0; k < 9; k++) { const x = ((k * 23 + r * 11 + (t / T) * (3 + r) * COLS) % (COLS + 20)) - 10
+      box(Math.round(x), Math.round(y), 5 + (k % 3) * 2, 1, .16 + (r % 2) * .05) } }
+}
+
+// --- the fish: our own sunfish, in colour, hanging on cables ---
+// [x, y, length in px, facing (1 right, -1 left), seed]
+const FISH = [[610, 215, 330, 1, 1], [255, 330, 210, 1, 2], [1060, 300, 175, 1, 3], [1420, 255, 128, -1, 4], [1700, 330, 96, 1, 5],
+              [400, 640, 196, 1, 6], [860, 590, 152, -1, 7], [1250, 640, 128, 1, 8], [1580, 590, 98, 1, 9]]
+
+// how lit each fish is: a wave of light rolling through the school, three times a loop, plus a shimmer
+const glowAt = (i, t) => { const w = .5 + .5 * Math.cos(TAU * (3 * t / T - i / FISH.length)); return .32 + .68 * w * w + .04 * Math.sin(TAU * 11 * t / T + i) }
+
+function fishShape(L) {
+  const p = new Path2D()
+  p.moveTo(.5 * L, .02 * L)
+  p.bezierCurveTo(.46 * L, -.14 * L, .14 * L, -.2 * L, -.12 * L, -.17 * L)
+  p.bezierCurveTo(-.3 * L, -.14 * L, -.4 * L, -.06 * L, -.43 * L, 0)
+  p.bezierCurveTo(-.4 * L, .07 * L, -.28 * L, .15 * L, -.1 * L, .17 * L)
+  p.bezierCurveTo(.16 * L, .19 * L, .44 * L, .14 * L, .5 * L, .02 * L)
+  p.closePath()
+  return p
+}
+function fish(x, y, L, dir, seed, glow, t) {
+  const sway = Math.sin(TAU * 2 * t / T + seed * 1.7) * .05, bob = Math.sin(TAU * 3 * t / T + seed) * 4
+  // the cables up to the deck
+  ctx.strokeStyle = "rgba(170,180,190,.35)"; ctx.lineWidth = 1
+  for (const dx of [-.18, .2]) { ctx.beginPath(); ctx.moveTo(x + dx * L * dir, y + bob - .16 * L); ctx.lineTo(x + dx * L * dir * 1.4, 0); ctx.stroke() }
+  ctx.save(); ctx.translate(x, y + bob); ctx.rotate(sway); ctx.scale(dir, 1)
+  // the halo
+  ctx.save(); ctx.globalCompositeOperation = "lighter"
+  const halo = ctx.createRadialGradient(0, 0, L * .1, 0, 0, L * .9)
+  halo.addColorStop(0, `rgba(255,150,110,${(.28 * glow).toFixed(3)})`); halo.addColorStop(.5, `rgba(90,200,230,${(.1 * glow).toFixed(3)})`); halo.addColorStop(1, "rgba(0,0,0,0)")
+  ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(0, 0, L * .9, 0, TAU); ctx.fill(); ctx.restore()
+  ctx.filter = `brightness(${(.4 + .8 * glow).toFixed(3)}) saturate(${(.7 + .5 * glow).toFixed(3)})`
+  ctx.shadowColor = `rgba(255,140,120,${(.8 * glow).toFixed(3)})`; ctx.shadowBlur = 30 * glow
+  // tail and fins, behind the body
+  const fin = "#ff6f8f", finDark = "#e04f78"
+  ctx.fillStyle = fin
+  ctx.beginPath(); ctx.moveTo(-.41 * L, 0); ctx.quadraticCurveTo(-.55 * L, -.2 * L, -.64 * L, -.17 * L); ctx.quadraticCurveTo(-.58 * L, 0, -.64 * L, .17 * L); ctx.quadraticCurveTo(-.55 * L, .2 * L, -.41 * L, 0); ctx.fill()
+  ctx.beginPath(); ctx.moveTo(.16 * L, -.17 * L)                                       // the spiny dorsal
+  for (let k = 0; k <= 8; k++) { const u = .16 - k * .065; ctx.lineTo((u - .025) * L, (-.245 + k * .008) * L); ctx.lineTo((u - .045) * L, (-.2 + k * .004) * L) }
+  ctx.lineTo(-.38 * L, -.08 * L); ctx.closePath(); ctx.fill()
+  ctx.fillStyle = finDark; ctx.beginPath(); ctx.moveTo(-.04 * L, .16 * L); ctx.quadraticCurveTo(-.2 * L, .32 * L, -.34 * L, .1 * L); ctx.closePath(); ctx.fill()   // anal fin
+  ctx.beginPath(); ctx.moveTo(.18 * L, .14 * L); ctx.quadraticCurveTo(.1 * L, .3 * L, .02 * L, .17 * L); ctx.closePath(); ctx.fill()                         // pelvic fin
+  ctx.shadowBlur = 0
+  // the body: teal-blue across the back, gold, then orange and pink to the belly and tail
+  const body = fishShape(L)
+  const gy = ctx.createLinearGradient(0, -.2 * L, 0, .19 * L)
+  gy.addColorStop(0, "#5cc9ea"); gy.addColorStop(.38, "#9fe3e0"); gy.addColorStop(.55, "#ffc06a"); gy.addColorStop(.8, "#ff8a4a"); gy.addColorStop(1, "#ff6f91")
+  ctx.fillStyle = gy; ctx.fill(body)
+  ctx.save(); ctx.clip(body)
+  const gx = ctx.createLinearGradient(-.45 * L, 0, .1 * L, 0); gx.addColorStop(0, "rgba(255,90,140,.75)"); gx.addColorStop(1, "rgba(255,90,140,0)")
+  ctx.fillStyle = gx; ctx.fillRect(-.5 * L, -.25 * L, .6 * L, .5 * L)
+  // speckles, and wavy blue lines on the cheek
+  let sd = seed * 97; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647
+  ctx.fillStyle = "rgba(150,50,60,.45)"
+  for (let k = 0; k < 70; k++) { ctx.beginPath(); ctx.arc((-.38 + r() * .7) * L, (-.15 + r() * .3) * L, (.006 + r() * .008) * L, 0, TAU); ctx.fill() }
+  ctx.strokeStyle = "rgba(40,120,200,.55)"; ctx.lineWidth = .012 * L
+  for (let k = 0; k < 3; k++) { ctx.beginPath(); ctx.moveTo(.42 * L, (-.02 + k * .04) * L); ctx.bezierCurveTo(.36 * L, (-.06 + k * .05) * L, .32 * L, (.02 + k * .04) * L, .24 * L, (-.02 + k * .05) * L); ctx.stroke() }
+  ctx.restore()
+  // the pectoral fin, gold, over the body
+  ctx.fillStyle = "#ffcf5a"; ctx.beginPath(); ctx.moveTo(.18 * L, -.01 * L); ctx.quadraticCurveTo(.02 * L, -.12 * L, -.02 * L, .02 * L); ctx.quadraticCurveTo(.06 * L, .06 * L, .18 * L, -.01 * L); ctx.fill()
+  // the dark ear flap with its bright edge, and the eye
+  ctx.fillStyle = "#1c2a3a"; ctx.beginPath(); ctx.ellipse(.27 * L, -.03 * L, .05 * L, .035 * L, -.2, 0, TAU); ctx.fill()
+  ctx.strokeStyle = "#ff9a3c"; ctx.lineWidth = .01 * L; ctx.stroke()
+  ctx.fillStyle = "#fff6e8"; ctx.beginPath(); ctx.arc(.4 * L, -.06 * L, .035 * L, 0, TAU); ctx.fill()
+  ctx.fillStyle = "#1a1a1a"; ctx.beginPath(); ctx.arc(.41 * L, -.06 * L, .02 * L, 0, TAU); ctx.fill()
+  ctx.strokeStyle = "rgba(120,40,40,.6)"; ctx.lineWidth = .008 * L; ctx.beginPath(); ctx.moveTo(.5 * L, .02 * L); ctx.lineTo(.45 * L, .035 * L); ctx.stroke()
+  ctx.filter = "none"; ctx.restore()
+}
+
+// each fish's light on the bridge above it and the columns around it
+function wash(t) {
+  ctx.save(); ctx.globalCompositeOperation = "lighter"
+  FISH.forEach(([x, y, L], i) => {
+    const gl = glowAt(i, t)
+    const gr = ctx.createRadialGradient(x, y - L * .3, 0, x, y - L * .3, L * 1.6)
+    gr.addColorStop(0, `rgba(255,140,110,${(.2 * gl).toFixed(3)})`); gr.addColorStop(.45, `rgba(80,190,220,${(.08 * gl).toFixed(3)})`); gr.addColorStop(1, "rgba(0,0,0,0)")
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y - L * .3, L * 1.6, 0, TAU); ctx.fill()
+  })
+  ctx.restore()
+}
+// and in the river: each fish a smear of colour on the water, broken by the ripples
+function reflections(t) {
+  ctx.save(); ctx.globalCompositeOperation = "lighter"
+  FISH.forEach(([x, , L], i) => {
+    const gl = glowAt(i, t), w = L * .7
+    for (let k = 0; k < 9; k++) {
+      const y = 975 + k * 7, wob = Math.sin(TAU * (4 * t / T) + k * 1.3 + i) * 10
+      const a = gl * .26 * (1 - k / 10)
+      ctx.fillStyle = k % 3 === 0 ? `rgba(90,200,230,${a.toFixed(3)})` : `rgba(255,140,100,${a.toFixed(3)})`
+      ctx.fillRect(x - w / 2 + wob + (k % 2) * 8, y, w * (.5 + .5 * Math.abs(Math.sin(k + i))), 3)
+    }
+  })
+  ctx.restore()
+}
+
+function render(t) {
+  t = ((t % T) + T) % T
+  paint(t)
+  const d = g.getImageData(0, 0, COLS, ROWS).data
+  ctx.fillStyle = "#0c0c0c"; ctx.fillRect(0, 0, W, H)
+  ctx.font = `700 ${CELL + 1}px "Geist Mono"`; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    const v = d[(y * COLS + x) * 4] / 255
+    const ch = RAMP[Math.min(RAMP.length - 1, Math.floor(v * RAMP.length))]
+    if (ch === " ") continue
+    ctx.fillStyle = `rgba(235,235,235,${(.25 + v * .75).toFixed(2)})`
+    ctx.fillText(ch, x * CELL + CELL / 2, y * CELL + CELL / 2 + 1)
+  }
+  wash(t)
+  reflections(t)
+  // far fish first, so nearer ones hang in front
+  FISH.map((f, i) => [f, i]).sort((a, b) => a[0][2] - b[0][2]).forEach(([[x, y, L, dir, seed], i]) => fish(x, y, L, dir, seed, glowAt(i, t), t))
+
+  // footer: who this is, and the music credit
+  const cr = window.CREDITS && window.CREDITS.length ? window.CREDITS : ['"Tejano Lofi" by Patrick · made with Suno']
+  const line = cr[Math.floor(t / 15) % cr.length]
+  ctx.textAlign = "right"; ctx.textBaseline = "alphabetic"
+  ctx.font = '500 20px "Geist"'; ctx.fillStyle = "rgba(255,255,255,0.75)"
+  ctx.fillText("♪  " + line, W - 60, H - 52)
+  ctx.textAlign = "left"; ctx.font = '700 22px "Geist Mono"'; ctx.fillStyle = "rgba(255,255,255,0.8)"
+  ctx.letterSpacing = "3px"; ctx.fillText("DEVSA FM  ·  devsa.community", 60, H - 52); ctx.letterSpacing = "0px"
+  const tw = 46
+  ;[TEAL, PINK, ORANGE].forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(60 + i * (tw + 6), H - 40, tw, 6) })
+}
+
+window.render = render
+window.ready = Promise.all([document.fonts.load('700 20px "Geist Mono"'), document.fonts.load('500 20px "Geist"')])
+window.ready.then(() => {
+  if (new URLSearchParams(location.search).has("still")) return render(8)
+  const t0 = performance.now()
+  ;(function loop() { render((performance.now() - t0) / 1000); requestAnimationFrame(loop) })()
+})
+</script>
+</body>
+</html>

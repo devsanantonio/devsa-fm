@@ -1,0 +1,107 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!--
+  DEVSA FM's YouTube thumbnail, 1280x720, built from real frames of the scenes.
+  thumb.html?a  the River Walk boat, big title
+  thumb.html?b  four scenes in a grid, the title on a plate in the middle
+  Render with: node shot.cjs (writes devsa-fm-thumbnail-a.png and -b.png)
+-->
+<style>
+  @font-face { font-family: "Geist Mono"; font-weight: 700; src: url(../scene/fonts/GeistMono-Bold.woff2) format("woff2"); }
+  @font-face { font-family: "Geist"; font-weight: 500; src: url(../scene/fonts/Geist-Medium.woff2) format("woff2"); }
+  :root { --teal: #00b2a9; --pink: #ef426f; --orange: #ff8200 }
+  html, body { margin: 0; width: 1280px; height: 720px; overflow: hidden; background: #0c0c0c }
+  .frame { position: absolute; background-repeat: no-repeat; }
+  .bars { display: flex; gap: 8px }
+  .bars i { display: block; height: 10px; width: 74px }
+  .bars i:nth-child(1) { background: var(--teal) } .bars i:nth-child(2) { background: var(--pink) } .bars i:nth-child(3) { background: var(--orange) }
+  .title { font-family: "Geist Mono"; font-weight: 700; color: #fff; letter-spacing: 6px; line-height: .9 }
+  .sub { font-family: "Geist"; font-weight: 500; color: rgba(255,255,255,.88) }
+
+  /* A: the boat */
+  #a .frame { inset: 0; background-image: url(rw-26.7.png); background-size: 1418px 798px; background-position: -20px -26px }
+  #a .shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(8,8,10,.92) 0%, rgba(8,8,10,.7) 30%, rgba(8,8,10,0) 52%), linear-gradient(0deg, rgba(8,8,10,.6), rgba(8,8,10,0) 26%) }
+  #a .copy { position: absolute; left: 56px; top: 64px }
+  #a .title { font-size: 128px }
+  #a .lockup { margin-bottom: 30px }
+  #a .sub { font-size: 34px; line-height: 1.25; max-width: 470px }
+  #a .tag { position: absolute; left: 56px; bottom: 50px; font-family: "Geist Mono"; font-weight: 700; font-size: 26px; letter-spacing: 3px; color: #ffcf6a }
+
+  /* B: four scenes */
+  #b .frame { width: 640px; height: 360px; background-size: 760px 428px; border: 0 }
+  #b .plate { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: rgba(10,10,12,.94); padding: 30px 44px 30px; border-radius: 18px; border: 2px solid rgba(255,255,255,.14); text-align: center }
+  #b .title { font-size: 104px }
+  #b .lockup { margin-bottom: 22px }
+  #b .sub { font-size: 28px }
+  .grid-line { position: absolute; background: #0c0c0c }
+  /* C and D: the >FM radio mark, on #161616 (its black body vanishes on pure black) */
+  #c .frame { inset: 0; background-image: url(rw-26.7.png); background-size: 1418px 798px; background-position: 170px -26px; background-color: #161616 }
+  #c .shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(22,22,22,.97) 0%, rgba(22,22,22,.86) 30%, rgba(22,22,22,0) 50%), linear-gradient(0deg, rgba(22,22,22,.6), rgba(22,22,22,0) 26%) }
+  #c .copy { position: absolute; left: 60px; top: 34px }
+  #c .radio { display: block; height: 380px; margin-bottom: 22px }
+  #c .sub { font-size: 31px; line-height: 1.25; width: 560px }
+  #c .tag { position: absolute; left: 60px; bottom: 46px; font-family: "Geist Mono"; font-weight: 700; font-size: 26px; letter-spacing: 3px; color: #ffcf6a }
+  #d .frame { width: 640px; height: 360px; background-size: 760px 428px; border: 0 }
+  #d .plate { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: rgba(22,22,22,.97); padding: 26px 48px 26px; border-radius: 18px; border: 2px solid rgba(255,255,255,.14); text-align: center }
+  #d .radio { display: block; height: 250px; margin: 0 auto 14px }
+  #d .sub { font-size: 26px }
+  /* the DEVSA mark, as shipped, with the FM wordmark beside it (never the word DEVSA beside the mark) */
+  .lockup { display: flex; align-items: flex-end; gap: 28px }
+  .lockup img { display: block }
+  .lockup .title { display: block; line-height: .78 }
+  #a .lockup img { height: 176px }
+  #a .lockup .title { font-size: 168px }
+  #b .lockup { justify-content: center; gap: 22px }
+  #b .lockup img { height: 120px }
+  #b .lockup .title { font-size: 116px }
+</style>
+</head>
+<body>
+<div id="a" hidden>
+  <div class="frame"></div><div class="shade"></div>
+  <div class="copy">
+    <div class="lockup"><img src="devsa-logo.svg" alt=""><span class="title">FM</span></div>
+    <div class="sub">Tejano lofi for San Antonio's learners and builders</div>
+  </div>
+  <div class="tag">devsa.community</div>
+</div>
+<div id="b" hidden>
+  <div class="frame" style="left:0;top:0;background-image:url(court-24.png);background-size:1150px 647px;background-position:-520px -250px"></div>
+  <div class="frame" style="left:640px;top:0;background-image:url(rand-4.995.png);background-position:-60px -30px"></div>
+  <div class="frame" style="left:0;top:360px;background-image:url(taco-206.png);background-position:-30px -24px"></div>
+  <div class="frame" style="left:640px;top:360px;background-image:url(rw-26.7.png);background-position:-120px -40px"></div>
+  <div class="grid-line" style="left:637px;top:0;width:6px;height:720px"></div>
+  <div class="grid-line" style="left:0;top:357px;width:1280px;height:6px"></div>
+  <div class="plate">
+    <div class="lockup"><img src="devsa-logo.svg" alt=""><span class="title">FM</span></div>
+    <div class="sub">Tejano lofi · San Antonio in ASCII</div>
+  </div>
+</div>
+<div id="c" hidden>
+  <div class="frame"></div><div class="shade"></div>
+  <div class="copy">
+    <img class="radio" src="devsa-fm-mark.svg" alt="DEVSA FM">
+    <div class="sub">Tejano lofi radio for San Antonio's<br>learners and builders</div>
+  </div>
+  <div class="tag">devsa.community</div>
+</div>
+<div id="d" hidden>
+  <div class="frame" style="left:0;top:0;background-image:url(court-24.png);background-size:1150px 647px;background-position:-520px -250px"></div>
+  <div class="frame" style="left:640px;top:0;background-image:url(rand-4.995.png);background-position:-60px -30px"></div>
+  <div class="frame" style="left:0;top:360px;background-image:url(taco-206.png);background-position:-30px -24px"></div>
+  <div class="frame" style="left:640px;top:360px;background-image:url(rw-26.7.png);background-position:-120px -40px"></div>
+  <div class="grid-line" style="left:637px;top:0;width:6px;height:720px"></div>
+  <div class="grid-line" style="left:0;top:357px;width:1280px;height:6px"></div>
+  <div class="plate">
+    <img class="radio" src="devsa-fm-mark.svg" alt="DEVSA FM">
+    <div class="sub">Tejano lofi radio · San Antonio in ASCII</div>
+  </div>
+</div>
+<script>
+  const v = (location.search.match(/[abcd]/) || ["a"])[0]
+  document.getElementById(v).hidden = false
+</script>
+</body>
+</html>

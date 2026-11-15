@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!--
+  DEVSA FM, the Instagram post: 1080x1350. The scenes are the star: six real frames, full bleed,
+  two across and three down, zoomed on each scene's subject. Type in Geist Pixel (Square), which
+  sits with the ASCII scenes. No logo on this one. (post-with-mark.html is the earlier version.)
+  Render with: node shot.cjs  (writes devsa-fm-instagram-1080x1350.png)
+-->
+<style>
+  @font-face { font-family: "Geist Pixel"; src: url(GeistPixel-Square.woff2) format("woff2"); }
+  @font-face { font-family: "Geist"; font-weight: 500; src: url(../scene/fonts/Geist-Medium.woff2) format("woff2"); }
+  html, body { margin: 0; width: 1080px; height: 1350px; overflow: hidden; background: #0c0c0c; color: #f2f2f2 }
+  .px { font-family: "Geist Pixel"; font-weight: 400 }
+  .top { position: absolute; left: 0; right: 0; top: 0; height: 212px; padding: 44px 52px 0; box-sizing: border-box; display: flex; justify-content: space-between; align-items: flex-start }
+  .title { font-size: 112px; line-height: 1; letter-spacing: 2px; margin-top: 18px; white-space: nowrap }
+  .tagline { font-size: 29px; line-height: 1.22; text-align: right; color: rgba(242,242,242,.85); margin-top: 14px }
+  .grid { position: absolute; left: 0; top: 212px; width: 1080px; display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: #0c0c0c }
+  .tile { position: relative; height: 302px; background-repeat: no-repeat; background-color: #0c0c0c }
+  .tile span { position: absolute; left: 14px; bottom: 12px; font-family: "Geist Pixel"; font-size: 22px; letter-spacing: 1px; color: #fff; background: rgba(10,10,12,.8); padding: 6px 10px 4px; border-radius: 4px }
+  .bottom { position: absolute; left: 0; right: 0; bottom: 0; height: 222px; padding: 26px 52px 0; box-sizing: border-box; display: flex; flex-direction: column; justify-content: flex-start; gap: 12px }
+  .bars { display: flex; gap: 8px; margin-bottom: 6px } .bars i { display: block; width: 64px; height: 8px }
+  .bars i:nth-child(1) { background: #00b2a9 } .bars i:nth-child(2) { background: #ef426f } .bars i:nth-child(3) { background: #ff8200 }
+  .lofi { font-size: 34px; color: rgba(242,242,242,.92) }
+  .watch { font-size: 42px; letter-spacing: 1px } .watch b { color: #ffcf6a; font-weight: 400 }
+  .credit { position: absolute; left: 52px; bottom: 30px; font-family: "Geist"; font-weight: 500; font-size: 20px; color: rgba(242,242,242,.55) }
+</style>
+</head>
+<body>
+  <div class="top">
+    <div class="px title">DEVSA FM</div>
+    <div class="px tagline">a night in<br>San Antonio,<br>in ASCII</div>
+  </div>
+  <div class="grid">
+    <div class="tile" style="background-image:url(commute-21.png);background-size:680px auto;background-position:-70px -50px"><span>the night bus</span></div>
+    <div class="tile" style="background-image:url(fish-10.png);background-size:680px auto;background-position:-70px -20px"><span>under the bridge</span></div>
+    <div class="tile" style="background-image:url(court-24.png);background-size:1133px auto;background-position:-466px -244px"><span>the game</span></div>
+    <div class="tile" style="background-image:url(taco-206.png);background-size:804px auto;background-position:-84px -86px"><span>the food truck</span></div>
+    <div class="tile" style="background-image:url(rand-4.995.png);background-size:680px auto;background-position:-70px -40px"><span>the Rand</span></div>
+    <div class="tile" style="background-image:url(rw-26.7.png);background-size:680px auto;background-position:-20px -50px"><span>the River Walk</span></div>
+  </div>
+  <div class="bottom">
+    <div class="bars"><i></i><i></i><i></i></div>
+    <div class="px lofi">Tejano lofi radio for the city's learners and builders</div>
+    <div class="px watch">live on YouTube <b>@devsatx</b></div>
+  </div>
+  <div class="credit">"Tejano Lofi" by Patrick · made with Suno</div>
+</body>
+</html>

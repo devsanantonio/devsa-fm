@@ -1,0 +1,208 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: "Geist Mono"; font-weight: 700; src: url(fonts/GeistMono-Bold.woff2) format("woff2"); }
+  @font-face { font-family: "Geist"; font-weight: 500; src: url(fonts/Geist-Medium.woff2) format("woff2"); }
+  html, body { margin: 0; background: #eee8db; overflow: hidden }
+  canvas { display: block }
+</style>
+</head>
+<body>
+<!--
+  DEVSA FM, Market Square at Fiesta: a day scene in the commute's ASCII style (dark characters
+  on warm paper). Papel picado strung across the frame in colour, swaying; four stalls under
+  striped awnings, signed with the City of San Antonio's concha, taco, jalapeño and maracas
+  icons; the arcade behind; and Linux San Antonio's penguin in line for a concha.
+  1920x1080, a seamless T-second loop: render(t) draws a frame.
+-->
+<canvas id="c" width="1920" height="1080"></canvas>
+<script>
+const T = 60, W = 1920, H = 1080, TAU = Math.PI * 2
+const TEAL = "#00b2a9", PINK = "#ef426f", ORANGE = "#ff8200"
+const BPM = 76                              // 76 beats in 60 s: the loop closes on a beat
+const PAPER = "#eee8db", INK = [28, 26, 22]
+const ctx = document.getElementById("c").getContext("2d")
+const CELL = 12, COLS = W / CELL, ROWS = H / CELL      // 160 x 90 characters
+const RAMP = " .,:;-=+*#%@"
+
+// the scene is painted as ink density at character resolution, then each cell becomes a character
+const sc = document.createElement("canvas"); sc.width = COLS; sc.height = ROWS
+const g = sc.getContext("2d", { willReadFrequently: true })
+const gray = v => { const c = Math.round(Math.max(0, Math.min(1, v)) * 255); return `rgb(${c},${c},${c})` }
+function box(x, y, w, h, v) { g.fillStyle = gray(v); g.fillRect(x, y, w, h) }
+
+// City of San Antonio icons, inked into the scene
+const ICON_FILES = ["concha", "taco", "jalapeno", "maracas"]
+const ICON = {}, ICON_IMG = {}
+async function loadIcons() {
+  for (const n of ICON_FILES) {
+    let svg = await (await fetch("icons/" + n + ".svg")).text()
+    const vb = svg.match(/viewBox="([^"]+)"/)[1].split(/\s+/).map(Number)
+    ICON[n] = { vb, svg: svg.replace(/#231f20/gi, "#ffffff").replace(/stroke:\s*#000(000)?;/gi, "stroke: #ffffff;").replace(/fill:\s*#000(000)?;/gi, "fill: #ffffff;") }
+  }
+}
+function icon(n, x, y, w, v) {
+  const key = n + "@" + w
+  let im = ICON_IMG[key]
+  if (!im) {
+    const { vb, svg } = ICON[n], sw = (vb[2] / w) * 1.1
+    const s2 = svg.replace(/stroke-width:\s*[^;]+;/g, "").replace(/stroke:\s*#ffffff;/g, `stroke: #ffffff; stroke-width: ${sw}px;`)
+    im = new Image(); im.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(s2); ICON_IMG[key] = im
+    return
+  }
+  if (!im.complete) return
+  const h = w * ICON[n].vb[3] / ICON[n].vb[2]
+  g.save(); g.globalAlpha = v; g.drawImage(im, x, y, w, h); g.restore()
+}
+// an icon centred on (cx, bottom)
+function iconAt(n, cx, bottom, w, v) { if (!ICON[n]) return; const h = w * ICON[n].vb[3] / ICON[n].vb[2]; icon(n, Math.round(cx - w / 2), Math.round(bottom - h), w, v) }
+
+const GROUND = 66                                   // where the stalls stand
+const STALLS = [["concha", 6], ["taco", 45], ["jalapeno", 84], ["maracas", 123]]   // [sign, left edge]
+const SW = 32                                       // stall width
+
+// a person in line, seen from the side, facing the concha stall (left)
+function person(x, foot, h, v) {
+  const head = foot - h
+  g.fillStyle = gray(v + .08); g.beginPath(); g.ellipse(x, head + 1.6, 1.6, 1.7, 0, 0, TAU); g.fill()
+  g.fillStyle = gray(v); g.beginPath()
+  g.moveTo(x - 2.2, head + 3.6); g.lineTo(x + 2.4, head + 3.6); g.lineTo(x + 2.8, foot - h * .38); g.lineTo(x - 2.6, foot - h * .38); g.closePath(); g.fill()
+  box(Math.round(x - 1.6), Math.round(foot - h * .38), 1, Math.round(h * .38), v)        // legs
+  box(Math.round(x + .8), Math.round(foot - h * .38), 1, Math.round(h * .38), v)
+}
+
+function paint(t) {
+  const bc = t * BPM / 60
+  box(0, 0, COLS, ROWS, 0)
+
+  // clouds drifting right, a full screen width a loop
+  for (const [cx, cy, w, h] of [[24, 8, 22, 4], [84, 5, 16, 3], [130, 11, 24, 4]]) {
+    const x = ((cx + (t / T) * (COLS + 40)) % (COLS + 40)) - 20
+    for (let k = 0; k < 4; k++) {
+      g.fillStyle = gray(.14); g.beginPath()
+      g.ellipse(x + (k - 1.5) * w * .26, cy + (k % 2 ? -1 : 0), w * .32, h * (k % 2 ? .75 : .55), 0, 0, TAU); g.fill()
+    }
+  }
+
+  // the market's arcade behind the stalls: a long wall, a row of arches, a stepped parapet
+  box(0, 30, COLS, GROUND - 30, .2)
+  box(0, 30, COLS, 1, .5)
+  for (let x = 0; x < COLS; x += 20) { box(x + 7, 27, 6, 3, .3); box(x + 9, 25, 2, 2, .3) }     // the parapet's steps
+  for (let x = 3; x < COLS; x += 10) {                                                          // arches
+    g.fillStyle = gray(.06); g.beginPath(); g.moveTo(x, GROUND); g.lineTo(x, 40); g.arc(x + 3.5, 40, 3.5, Math.PI, 0); g.lineTo(x + 7, GROUND); g.closePath(); g.fill()
+  }
+
+  // the stalls: posts, a striped awning with a scalloped hem, a counter, the sign on top
+  for (const [sign, x] of STALLS) {
+    box(x + 1, 46, SW - 2, 10, .1)                                                              // the booth's back wall
+    box(x + 1, 46, 1, GROUND - 46, .7); box(x + SW - 2, 46, 1, GROUND - 46, .7)               // posts
+    for (let k = 0; k < SW; k++) box(x + k, 42, 1, 5, Math.floor(k / 3) % 2 ? .18 : .62)        // the awning's stripes
+    box(x - 1, 41, SW + 2, 1, .75)
+    for (let k = 0; k < SW; k += 3) { g.fillStyle = gray(Math.floor(k / 3) % 2 ? .18 : .62); g.beginPath(); g.arc(x + k + 1.5, 47, 1.5, 0, Math.PI); g.fill() }
+    box(x, 56, SW, GROUND - 56, .42); box(x - 1, 56, SW + 2, 1, .8)                             // the counter
+    for (let k = 3; k < SW - 3; k += 6) box(x + k, 59, 3, 4, .24)                               // its panels
+    g.fillStyle = gray(.0); g.fillRect(x + SW / 2 - 11, 23, 22, 17)                            // a clear board for the sign
+    iconAt(sign, x + SW / 2, 40, { concha: 17, taco: 22, jalapeno: 13, maracas: 14 }[sign], .95)   // the sign
+    for (let k = 0; k < 4; k++) iconAt(sign, x + 5 + k * 7.3, 56, sign === "taco" ? 6 : 5, .8)  // the goods, on the counter
+  }
+
+  // the plaza: pale flagstones
+  box(0, GROUND, COLS, ROWS - GROUND, .05)
+  box(0, GROUND, COLS, 1, .35)
+  for (let y = GROUND + 5; y < ROWS; y += 6) box(0, y, COLS, 1, .1)
+  for (let y = GROUND; y < ROWS; y += 6) for (let x = ((y / 6) % 2) * 6; x < COLS; x += 12) box(x, y + 1, 1, 5, .1)
+
+  // the line for conchas, front to back; the penguin is third (drawn over the scene)
+  // each person shifts their weight now and then, on different beats
+  const shift = (i) => (Math.floor(bc / 4) + i) % 3 === 0 ? 1 : 0
+  ;[[24, 15, .62], [33, 13, .58], [55, 16, .6], [65, 12, .55]].forEach(([x, h, v], i) => person(x + shift(i), 81, h, v))
+}
+
+// Linux San Antonio's penguin, pixel art: kept crisp
+const PENGUIN = new Image(); PENGUIN.src = "penguin.png"
+
+// papel picado: one sprite per colour, with its pattern cut out (so the scene shows through)
+const PICADO = ["#ef426f", "#ff8200", "#00b2a9", "#f2c230", "#8a4fd8", "#3aae4a"]
+const FW = 70, FH = 86
+const SPRITES = PICADO.map(c => {
+  const s = document.createElement("canvas"); s.width = FW; s.height = FH; const p = s.getContext("2d")
+  p.fillStyle = c; p.beginPath(); p.moveTo(0, 0); p.lineTo(FW, 0); p.lineTo(FW, FH - 8)
+  for (let x = FW; x >= 0; x -= 7) p.lineTo(x - 3.5, FH - ((FW - x) / 7 % 2 ? 8 : 0))         // the fringed hem
+  p.lineTo(0, FH - 8); p.closePath(); p.fill()
+  p.globalCompositeOperation = "destination-out"
+  p.beginPath()
+  for (let x = 8; x < FW - 4; x += 9) p.rect(x, 7, 4, 4)                                         // a row of windows
+  const cx = FW / 2, cy = FH / 2 + 2                                                           // a flower
+  p.moveTo(cx + 7, cy); p.arc(cx, cy, 7, 0, TAU)
+  for (let k = 0; k < 8; k++) { const a = k * TAU / 8, px = cx + Math.cos(a) * 15, py = cy + Math.sin(a) * 15
+    p.moveTo(px + 3.2, py); p.arc(px, py, 3.2, 0, TAU) }
+  for (const [dx, dy] of [[-24, -14], [24, -14], [-24, 20], [24, 20]]) {                         // diamonds in the corners
+    p.moveTo(cx + dx, cy + dy - 5); p.lineTo(cx + dx + 4, cy + dy); p.lineTo(cx + dx, cy + dy + 5); p.lineTo(cx + dx - 4, cy + dy); p.closePath() }
+  for (let x = 6; x < FW - 4; x += 6) { p.moveTo(x + 1.6, FH - 16); p.arc(x, FH - 16, 1.6, 0, TAU) }   // a row of dots
+  p.fill()
+  return s
+})
+function papelPicado(t) {
+  for (const [y0, sag, n, off, ph] of [[22, 30, 24, 0, 0], [120, 44, 22, 3, 1.3]]) {
+    const at = x => y0 + sag * 4 * (x / W) * (1 - x / W)                                         // the string's sag
+    ctx.strokeStyle = "rgba(28,26,22,.75)"; ctx.lineWidth = 2; ctx.beginPath()
+    for (let x = 0; x <= W; x += 20) x ? ctx.lineTo(x, at(x)) : ctx.moveTo(x, at(x)); ctx.stroke()
+    const gap = W / n
+    for (let i = 0; i < n; i++) {
+      const x = gap * (i + .5), y = at(x)
+      const sway = Math.sin(TAU * 2 * t / T + i * .8 + ph) * .07 + Math.sin(TAU * 5 * t / T + i * 1.9) * .025   // the breeze, in whole cycles
+      ctx.save(); ctx.translate(x, y); ctx.rotate(sway)
+      ctx.drawImage(SPRITES[(i + off) % SPRITES.length], -FW / 2, 0); ctx.restore()
+    }
+  }
+}
+
+function render(t) {
+  t = ((t % T) + T) % T
+  paint(t)
+  const d = g.getImageData(0, 0, COLS, ROWS).data
+  ctx.fillStyle = PAPER; ctx.fillRect(0, 0, W, H)
+  ctx.font = `700 ${CELL + 1}px "Geist Mono"`; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    const v = d[(y * COLS + x) * 4] / 255
+    const ch = RAMP[Math.min(RAMP.length - 1, Math.floor(v * RAMP.length))]
+    if (ch === " ") continue
+    ctx.fillStyle = `rgba(${INK.join(",")},${(.3 + v * .7).toFixed(2)})`
+    ctx.fillText(ch, x * CELL + CELL / 2, y * CELL + CELL / 2 + 1)
+  }
+  // the penguin, third in line, bouncing on its toes to the beat and craning for a look at the conchas
+  if (PENGUIN.complete && PENGUIN.width) {
+    const ph = (t * BPM / 60) % 1, h = 112, w = h * PENGUIN.width / PENGUIN.height
+    const hop = Math.pow(Math.sin(ph * Math.PI), 2) * 6
+    const lean = Math.sin(TAU * 3 * t / T) * .06
+    ctx.save(); ctx.translate(44 * CELL, 81 * CELL + 4 - hop); ctx.rotate(-Math.max(0, lean))
+    ctx.imageSmoothingEnabled = false; ctx.drawImage(PENGUIN, -w / 2, -h, w, h); ctx.restore()
+  }
+  papelPicado(t)
+
+  // footer: who this is, and the music credit
+  const cr = window.CREDITS && window.CREDITS.length ? window.CREDITS : ['"Tejano Lofi" by Patrick · made with Suno']
+  const line = cr[Math.floor(t / 15) % cr.length]
+  ctx.textAlign = "right"; ctx.textBaseline = "alphabetic"
+  ctx.font = '500 20px "Geist"'; ctx.fillStyle = "rgba(28,26,22,.8)"
+  ctx.fillText("♪  " + line, W - 60, H - 52)
+  ctx.textAlign = "left"; ctx.font = '700 22px "Geist Mono"'; ctx.fillStyle = "rgba(28,26,22,.85)"
+  ctx.letterSpacing = "3px"; ctx.fillText("DEVSA FM  ·  devsa.community", 60, H - 52); ctx.letterSpacing = "0px"
+  const tw = 46
+  ;[TEAL, PINK, ORANGE].forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(60 + i * (tw + 6), H - 40, tw, 6) })
+}
+
+window.render = render
+window.ready = Promise.all([document.fonts.load('700 20px "Geist Mono"'), document.fonts.load('500 20px "Geist"'), loadIcons(),
+  PENGUIN.complete ? 0 : new Promise(r => { PENGUIN.onload = r; PENGUIN.onerror = r })])
+  .then(() => { paint(0); return new Promise(r => setTimeout(r, 300)) })
+window.ready.then(() => {
+  if (new URLSearchParams(location.search).has("still")) return render(8)
+  const t0 = performance.now()
+  ;(function loop() { render((performance.now() - t0) / 1000); requestAnimationFrame(loop) })()
+})
+</script>
+</body>
+</html>

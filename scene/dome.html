@@ -1,0 +1,329 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: "Geist Mono"; font-weight: 700; src: url(fonts/GeistMono-Bold.woff2) format("woff2"); }
+  @font-face { font-family: "Geist"; font-weight: 500; src: url(fonts/Geist-Medium.woff2) format("woff2"); }
+  html, body { margin: 0; background: #0c0c0c; overflow: hidden }
+  canvas { display: block }
+</style>
+</head>
+<body>
+<!--
+  DEVSA FM, the dome: night on the street in front of the Alamodome. The dome is drawn in
+  characters (the low white roof, the four masts and their cables, the glass band along its
+  face) with the Tower of the Americas behind it and the stars over both. A low red electric
+  roadster drives the street with the Linux San Antonio penguin at the wheel, then fires its
+  thrusters, lifts off, flies past the masts and sets back down, once a cycle.
+
+  The roadster is our own drawing: no maker's name or badge on it. Its plate reads >SA_.
+
+  Synced (render.cjs SYNC=...): the loop is the song, with the song inside it, and BEATS carries
+  its beat grid, so the underglow, the dome's glass band and the mast lights pulse on the real
+  beat. Everything else runs on ~60 s cycles, a whole number per loop (LT).
+  1920x1080, a seamless T-second loop: render(t) draws a frame.
+-->
+<canvas id="c" width="1920" height="1080"></canvas>
+<script>
+const B = window.BEATS || null
+const T = window.LOOP_T || 60, W = 1920, H = 1080, TAU = Math.PI * 2
+const LT = T / Math.max(1, Math.round(T / 60))
+const cycles = k => Math.max(1, Math.round(k * LT / 60))
+const TEAL = "#00b2a9", PINK = "#ef426f", ORANGE = "#ff8200"
+const BPM = B ? B.bpm : 76, OFFSET = B ? B.offset : 0
+const beatPh = t => { const bc = (t - OFFSET) * BPM / 60; return bc - Math.floor(bc) }
+const pulseAt = t => Math.exp(-beatPh(t) * 3.5)
+const clamp = x => Math.max(0, Math.min(1, x))
+const ease = x => { x = clamp(x); return x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2 }
+const span = (x, a, b) => clamp((x - a) / (b - a))
+const lerp = (a, b, p) => a + (b - a) * p
+const ctx = document.getElementById("c").getContext("2d")
+const CELL = 12, COLS = W / CELL, ROWS = H / CELL      // 160 x 90 characters
+const RAMP = " .,:;-=+*#%@"
+
+const sc = document.createElement("canvas"); sc.width = COLS; sc.height = ROWS
+const g = sc.getContext("2d", { willReadFrequently: true })
+const gray = v => { const c = Math.round(clamp(v) * 255); return `rgb(${c},${c},${c})` }
+function box(x, y, w, h, v) { g.fillStyle = gray(v); g.fillRect(x, y, w, h) }
+function line(x1, y1, x2, y2, v, w = .7) { g.strokeStyle = gray(v); g.lineWidth = w; g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke() }
+
+// the City of San Antonio's icon for the Tower of the Americas, standing off to the left
+const ICON_FILES = ["tower"]
+const ICON = {}, ICON_IMG = {}
+async function loadIcons() {
+  for (const n of ICON_FILES) {
+    let svg = await (await fetch("icons/" + n + ".svg")).text()
+    const vb = svg.match(/viewBox="([^"]+)"/)[1].split(/\s+/).map(Number)
+    ICON[n] = { vb, svg: svg.replace(/#231f20/gi, "#ffffff").replace(/stroke:\s*#000(000)?;/gi, "stroke: #ffffff;").replace(/fill:\s*#000(000)?;/gi, "fill: #ffffff;") }
+  }
+}
+function icon(n, x, y, w, v) {
+  const key = n + "@" + w
+  let im = ICON_IMG[key]
+  if (!im) {
+    const { vb, svg } = ICON[n], sw = (vb[2] / w) * 1.1
+    const s2 = svg.replace(/stroke-width:\s*[^;]+;/g, "").replace(/stroke:\s*#ffffff;/g, `stroke: #ffffff; stroke-width: ${sw}px;`)
+    im = new Image(); im.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(s2); ICON_IMG[key] = im
+    return
+  }
+  if (!im.complete) return
+  const h = w * ICON[n].vb[3] / ICON[n].vb[2]
+  g.save(); g.globalAlpha = v; g.drawImage(im, x, y, w, h); g.restore()
+}
+const onGround = (n, x, base, w, v) => { if (ICON[n]) icon(n, x, base - w * ICON[n].vb[3] / ICON[n].vb[2], w, v) }
+
+// the layout, in cells
+const ROOF_L = 34, ROOF_R = 138, ROOF_Y = 37, FACE_TOP = 41, PLAZA = 55
+const ROAD_TOP = 62, ROAD_BOT = 78
+// the masts: [x, top, foot, front]: the two in front stand on the plaza, the two behind rise out of the roof
+const MASTS = [[46, 11, PLAZA, 1], [126, 11, PLAZA, 1], [62, 19, ROOF_Y, 0], [110, 19, ROOF_Y, 0]]
+const DASH = 10, SPEED = DASH * 6 / 60 * 10        // the road: 10 cells a second
+const LAMP = 40                                    // streetlamps 40 cells apart
+const roadOff = t => (t * SPEED) % DASH
+
+function paint(t) {
+  box(0, 0, COLS, ROWS, .03)
+  // stars, twinkling in whole cycles a loop
+  let st = 9; const sr = () => (st = (st * 16807) % 2147483647) / 2147483647
+  for (let i = 0; i < 80; i++) {
+    const x = Math.floor(sr() * COLS), y = Math.floor(sr() * 34), k = cycles(1 + Math.floor(sr() * 4)), ph = sr() * TAU
+    box(x, y, 1, 1, .26 + .3 * sr() + .16 * Math.sin(TAU * k * t / LT + ph))
+  }
+  // the Tower of the Americas off to the left, and a few downtown towers to the right, lit window by window
+  onGround("tower", 8, PLAZA - 1, 24, .85)
+  box(19, PLAZA - 1 - 24 * 38.05 / 21.39 - 1, 1, 1, .35 + .65 * (.5 + .5 * Math.sin(TAU * cycles(15) * t / LT)))   // its beacon
+  for (const [x, w, h, sd] of [[140, 7, 22, 3], [148, 5, 30, 7], [154, 6, 18, 11]]) {
+    box(x, PLAZA - h, w, h, .14)
+    for (let y = PLAZA - h + 2; y < PLAZA - 1; y += 2) for (let xx = x + 1; xx < x + w - 1; xx += 2)
+      if ((xx * 31 + y * 17 + sd) % 5 < 2) box(xx, y, 1, 1, .42 + .12 * Math.sin(TAU * cycles(2) * t / LT + xx + y))
+  }
+
+  // the back masts first, then the roof over their feet
+  for (const [x, top, foot, front] of MASTS) if (!front) { box(x, top, 1, foot - top, .62); box(x - 1, top, 3, 1, .8) }
+  // the roof: a low white lid, brightest along its crown, with its panel seams
+  g.fillStyle = gray(.72); g.beginPath(); g.moveTo(ROOF_L, FACE_TOP)
+  g.quadraticCurveTo((ROOF_L + ROOF_R) / 2, ROOF_Y - 5, ROOF_R, FACE_TOP); g.closePath(); g.fill()
+  g.fillStyle = gray(.88); g.beginPath(); g.moveTo(ROOF_L + 14, FACE_TOP - 2)
+  g.quadraticCurveTo((ROOF_L + ROOF_R) / 2, ROOF_Y - 4, ROOF_R - 14, FACE_TOP - 2); g.lineTo(ROOF_R - 18, FACE_TOP - 1.5)
+  g.quadraticCurveTo((ROOF_L + ROOF_R) / 2, ROOF_Y - 2.5, ROOF_L + 18, FACE_TOP - 1.5); g.closePath(); g.fill()
+  for (let x = ROOF_L + 8; x < ROOF_R - 4; x += 8) line(x, FACE_TOP, (x + (ROOF_L + ROOF_R) / 2) / 2, ROOF_Y - 1, .55, .5)
+  // the face: concrete piers, the lit glass band, and the round entrance towers at each end
+  box(ROOF_L, FACE_TOP, ROOF_R - ROOF_L, PLAZA - FACE_TOP, .3)
+  const band = .55 + .25 * pulseAt(t)
+  box(ROOF_L + 2, FACE_TOP + 3, ROOF_R - ROOF_L - 4, 3, band)
+  box(ROOF_L + 2, FACE_TOP + 9, ROOF_R - ROOF_L - 4, 2, band * .8)
+  for (let x = ROOF_L + 4; x < ROOF_R - 2; x += 5) box(x, FACE_TOP, 1, PLAZA - FACE_TOP, .18)
+  for (const cx of [ROOF_L + 10, ROOF_R - 10]) {
+    g.fillStyle = gray(.5); g.beginPath(); g.ellipse(cx, FACE_TOP + 6, 6, 8, 0, Math.PI, 0); g.fill()
+    box(cx - 6, FACE_TOP + 6, 12, PLAZA - FACE_TOP - 6, .42)
+    for (let y = FACE_TOP + 4; y < PLAZA - 1; y += 3) box(cx - 5, y, 10, 1, .62)
+  }
+  // the front masts, with the cables fanning down to the roof from each mast's head
+  for (const [x, top, foot] of MASTS) {
+    const front = foot === PLAZA
+    if (front) { box(x, top, 1, foot - top, .75); box(x - 1, top, 3, 1, .95) }
+    const toward = x < 86 ? 1 : -1
+    for (const k of [1, 2, 3]) line(x, top + 1, x + toward * k * (front ? 7 : 6), FACE_TOP - (front ? 2 : 3) + (front ? 0 : k * .4), .42, .45)
+    if (front) for (const k of [1, 2]) line(x, top + 1, x - toward * k * 4, FACE_TOP + 1, .3, .45)
+  }
+  // the plaza, then the road with its dashed centre line scrolling left
+  box(0, PLAZA, COLS, ROAD_TOP - PLAZA, .1)
+  for (let x = 0; x < COLS; x += 3) box(x + ((x * 7) % 2), PLAZA + 2 + (x % 4), 1, 1, .2)
+  box(0, ROAD_TOP, COLS, ROAD_BOT - ROAD_TOP, .16)
+  box(0, ROAD_TOP, COLS, 1, .42); box(0, ROAD_BOT - 1, COLS, 1, .42)
+  const off = roadOff(t)
+  for (let x = -DASH; x < COLS + DASH; x += DASH) box(x - off, (ROAD_TOP + ROAD_BOT) / 2, 5, 1, .6)
+  box(0, ROAD_BOT, COLS, ROWS - ROAD_BOT, .06)
+
+  // streetlamps on the far kerb, passing with the road, each with its pool of light
+  const loff = (t * SPEED) % LAMP
+  g.save(); g.globalCompositeOperation = "lighten"
+  for (let x = -LAMP; x < COLS + LAMP; x += LAMP) {
+    const px = Math.round(x - loff + 20)
+    const pool = g.createRadialGradient(px + 3, ROAD_TOP + 3, 0, px + 3, ROAD_TOP + 3, 14)
+    pool.addColorStop(0, gray(.56)); pool.addColorStop(1, gray(.16))
+    g.fillStyle = pool; g.beginPath(); g.ellipse(px + 3, ROAD_TOP + 4, 15, 6, 0, 0, TAU); g.fill()
+  }
+  g.restore()
+  for (let x = -LAMP; x < COLS + LAMP; x += LAMP) {
+    const px = Math.round(x - loff + 20)
+    box(px, PLAZA - 6, 1, ROAD_TOP - PLAZA + 6, .38); box(px, PLAZA - 6, 4, 1, .38); box(px + 2, PLAZA - 5, 3, 1, 1)
+  }
+
+  // the roadster's marks on the road: headlights ahead on the ground, and the dust its thrusters raise
+  const f = flight(t)
+  if (f.alt < 40) {
+    g.save(); g.globalCompositeOperation = "lighten"
+    const beam = g.createLinearGradient(100, 0, 150, 0); beam.addColorStop(0, gray(.55)); beam.addColorStop(1, gray(.12))
+    g.fillStyle = beam; g.beginPath(); g.moveTo(98, 71); g.lineTo(150, 66); g.lineTo(150, 78); g.lineTo(98, 74); g.closePath(); g.fill()
+    g.restore()
+  }
+  if (f.dust > 0) {
+    let s = 21; const r = () => (s = (s * 16807) % 2147483647) / 2147483647
+    for (let i = 0; i < 70; i++) {
+      const a = r() * Math.PI, rr = (4 + r() * 22) * f.dust, x = 76 + Math.cos(a) * rr * 1.8, y = 73 - Math.sin(a) * rr * .35 - r() * 2
+      box(Math.round(x), Math.round(y), 1, 1, (.25 + .4 * r()) * (1 - f.dust * .55))
+    }
+  }
+}
+
+// one flight a cycle: drive, lift on the thrusters, fly past the masts, set down, drive on
+// p is how far into the cycle; alt is pixels above the road; pitch in radians; thrust 0..1
+function flight(t) {
+  const p = (t % LT) / LT
+  const lift = ease(span(p, .38, .52)), land = ease(span(p, .8, .93))
+  const alt = 400 * (lift - land) + (p > .5 && p < .82 ? Math.sin(TAU * 3 * (p - .5) / .32) * 10 : 0)
+  const pitch = -.09 * Math.sin(Math.PI * span(p, .38, .56)) + .07 * Math.sin(Math.PI * span(p, .78, .93))
+  const thrust = Math.max(Math.sin(Math.PI * span(p, .35, .55)), Math.sin(Math.PI * span(p, .78, .95)) * .8, p > .52 && p < .8 ? .25 : 0)
+  const dust = Math.max(Math.sin(Math.PI * span(p, .36, .48)), Math.sin(Math.PI * span(p, .86, .97)))
+  const dx = 90 * (lift - land)                                       // it gains on the camera a little in the air
+  return { p, alt, pitch, thrust, dust, dx }
+}
+
+const PENGUIN = new Image(); PENGUIN.src = "penguin.png"              // Linux San Antonio's penguin, pixel art
+function glow(x, y, r, c) {
+  const gr = ctx.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, c); gr.addColorStop(1, "rgba(0,0,0,0)")
+  ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill()
+}
+// the roadster: long low nose, a bubble of glass over the cockpit, wide hips over the rear wheels
+function roadster(t) {
+  const f = flight(t), L = 470, x0 = 690 + f.dx, base = 878 - f.alt
+  const bob = f.alt < 4 ? Math.sin(TAU * cycles(40) * t / LT) * 1.2 : 0
+  // its shadow on the road, smaller and fainter the higher it flies
+  const sh = clamp(1 - f.alt / 520)
+  ctx.fillStyle = `rgba(0,0,0,${(.32 * sh).toFixed(3)})`; ctx.beginPath(); ctx.ellipse(x0 + L / 2, 888, L * .5 * (.5 + .5 * sh), 12 * sh, 0, 0, TAU); ctx.fill()
+
+  ctx.save(); ctx.translate(x0 + L / 2, base + bob); ctx.rotate(f.pitch); ctx.translate(-L / 2, 0)
+  // the thrusters: blue-white flames from under the sills while it lifts, flies and lands
+  if (f.thrust > .02) {
+    ctx.save(); ctx.globalCompositeOperation = "lighter"
+    for (const tx of [96, 236, 376]) {
+      const len = 40 + 130 * f.thrust * (.85 + .15 * Math.sin(TAU * 9 * t + tx))
+      const fl = ctx.createLinearGradient(0, -14, 0, -14 + len)
+      fl.addColorStop(0, `rgba(220,240,255,${(.9 * f.thrust).toFixed(2)})`); fl.addColorStop(.35, `rgba(90,170,255,${(.55 * f.thrust).toFixed(2)})`); fl.addColorStop(1, "rgba(40,90,255,0)")
+      ctx.fillStyle = fl; ctx.beginPath(); ctx.moveTo(tx - 12, -14); ctx.lineTo(tx + 12, -14); ctx.lineTo(tx + 4, -14 + len); ctx.lineTo(tx - 4, -14 + len); ctx.closePath(); ctx.fill()
+      glow(tx, -10, 46 * f.thrust, "rgba(140,200,255,.5)")
+    }
+    ctx.restore()
+  }
+  // underglow in the three brand colours, on the beat
+  ctx.save(); ctx.globalCompositeOperation = "lighter"
+  const ug = .18 + .3 * pulseAt(t)
+  ;[[110, TEAL], [235, PINK], [360, ORANGE]].forEach(([ux, c]) => {
+    const gr = ctx.createRadialGradient(ux, -8, 0, ux, -8, 120); gr.addColorStop(0, c + Math.round(ug * 255).toString(16).padStart(2, "0")); gr.addColorStop(1, c + "00")
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.ellipse(ux, -6, 130, 26, 0, 0, TAU); ctx.fill()
+  })
+  ctx.restore()
+
+  // the driver, behind the glass: the penguin, mostly hidden by the body
+  if (PENGUIN.complete && PENGUIN.width) {
+    const pw = 96, ph = pw * PENGUIN.height / PENGUIN.width
+    ctx.drawImage(PENGUIN, 196, -150 + Math.sin(TAU * BPM / 60 * (t - OFFSET)) * 2 * (f.alt < 4 ? 1 : 0), pw, ph)
+  }
+  // the body: deep red, a long falling nose, a fuller rear
+  const body = new Path2D()
+  body.moveTo(6, -24)
+  body.quadraticCurveTo(-4, -58, 34, -78)               // the tail
+  body.quadraticCurveTo(110, -98, 182, -96)             // the rear deck and hips
+  body.lineTo(312, -98)                                 // the cowl
+  body.quadraticCurveTo(410, -88, 456, -50)             // the hood, falling to the nose
+  body.quadraticCurveTo(472, -30, 456, -20)             // the nose
+  body.lineTo(6, -20); body.closePath()
+  const paint = ctx.createLinearGradient(0, -100, 0, -18)
+  paint.addColorStop(0, "#d8202c"); paint.addColorStop(.45, "#a3121c"); paint.addColorStop(1, "#5e0a12")
+  ctx.fillStyle = paint; ctx.fill(body)
+  // the glass bubble over the cockpit, tinted, with the night sliding across it
+  const glass = new Path2D(); glass.moveTo(170, -96); glass.quadraticCurveTo(222, -150, 318, -98); glass.closePath()
+  ctx.fillStyle = "rgba(20,26,36,.55)"; ctx.fill(glass)
+  ctx.save(); ctx.clip(glass)
+  const gx = 160 + ((t * SPEED * CELL * .35) % 260)
+  ctx.fillStyle = "rgba(255,255,255,.16)"; ctx.beginPath(); ctx.moveTo(gx, -150); ctx.lineTo(gx + 30, -150); ctx.lineTo(gx - 10, -90); ctx.lineTo(gx - 40, -90); ctx.closePath(); ctx.fill()
+  ctx.restore()
+  ctx.strokeStyle = "rgba(255,255,255,.25)"; ctx.lineWidth = 2; ctx.stroke(glass)
+  // the shoulder line and a highlight along the top of the body
+  ctx.strokeStyle = "rgba(255,190,190,.35)"; ctx.lineWidth = 2
+  ctx.beginPath(); ctx.moveTo(40, -74); ctx.quadraticCurveTo(110, -92, 182, -90); ctx.lineTo(312, -92); ctx.quadraticCurveTo(400, -84, 446, -52); ctx.stroke()
+  ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.beginPath(); ctx.moveTo(30, -46); ctx.lineTo(440, -40); ctx.stroke()
+  // the lights: a thin bar across the tail, a slit of headlight at the nose
+  ctx.fillStyle = "#ff3b3b"; ctx.fillRect(4, -62, 9, 26)
+  ctx.fillStyle = "#fff4d6"; ctx.beginPath(); ctx.moveTo(430, -58); ctx.lineTo(458, -44); ctx.lineTo(452, -40); ctx.lineTo(426, -52); ctx.closePath(); ctx.fill()
+  // the plate, on the tail: >SA_
+  ctx.fillStyle = "#f2f2f2"; ctx.fillRect(14, -44, 34, 16)
+  ctx.fillStyle = "#161616"; ctx.font = '700 11px "Geist Mono"'; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(">SA_", 31, -35.5)
+  ctx.save(); ctx.globalCompositeOperation = "lighter"
+  glow(8, -49, 60, "rgba(255,59,59,.4)"); glow(452, -48, 80, "rgba(255,240,200,.45)")
+  ctx.restore()
+
+  // the wheels: dark arches, low tyres, turbine-style hubs turning with the road
+  for (const wx of [104, 368]) {
+    const R = 36
+    ctx.fillStyle = "#1a0b0d"; ctx.beginPath(); ctx.arc(wx, -18, R + 8, Math.PI, 0); ctx.fill()
+    ctx.fillStyle = "#121212"; ctx.beginPath(); ctx.arc(wx, -18, R, 0, TAU); ctx.fill()
+    ctx.fillStyle = "#b9bcc2"; ctx.beginPath(); ctx.arc(wx, -18, R * .62, 0, TAU); ctx.fill()
+    ctx.save(); ctx.translate(wx, -18); ctx.rotate(t * SPEED * CELL / R)
+    ctx.fillStyle = "#5d6168"
+    for (let k = 0; k < 10; k++) { ctx.rotate(TAU / 10); ctx.beginPath(); ctx.moveTo(4, -2); ctx.lineTo(R * .58, -6); ctx.lineTo(R * .58, 0); ctx.closePath(); ctx.fill() }
+    ctx.fillStyle = "#2a2c30"; ctx.beginPath(); ctx.arc(0, 0, 6, 0, TAU); ctx.fill()
+    ctx.restore()
+  }
+  ctx.restore()
+}
+
+// the dome lit for the night: a cool wash over the roof, warm light along the glass band, and
+// the lamps at the masts' heads, red, blinking slowly and pulsing with the beat
+function domeLights(t) {
+  ctx.save(); ctx.globalCompositeOperation = "lighter"
+  ctx.save(); ctx.translate(1032, 470); ctx.scale(1, .22)
+  const w = ctx.createRadialGradient(0, 0, 0, 0, 0, 640); w.addColorStop(0, "rgba(190,215,255,.16)"); w.addColorStop(1, "rgba(190,215,255,0)")
+  ctx.fillStyle = w; ctx.beginPath(); ctx.arc(0, 0, 640, 0, TAU); ctx.fill(); ctx.restore()
+  const bandA = .1 + .12 * pulseAt(t)
+  ctx.fillStyle = `rgba(255,196,120,${bandA.toFixed(3)})`; ctx.fillRect(ROOF_L * CELL + 24, (FACE_TOP + 3) * CELL, (ROOF_R - ROOF_L) * CELL - 48, 36)
+  for (const [x, top] of MASTS) {
+    const on = .45 + .35 * (.5 + .5 * Math.sin(TAU * cycles(20) * t / LT + x)) + .2 * pulseAt(t)
+    glow(x * CELL + 6, top * CELL + 6, 40, `rgba(255,70,50,${(on * .55).toFixed(3)})`)
+    ctx.fillStyle = `rgba(255,120,90,${on.toFixed(3)})`; ctx.beginPath(); ctx.arc(x * CELL + 6, top * CELL + 6, 4, 0, TAU); ctx.fill()
+  }
+  ctx.restore()
+}
+
+function render(t) {
+  t = ((t % T) + T) % T
+  paint(t)
+  const d = g.getImageData(0, 0, COLS, ROWS).data
+  ctx.fillStyle = "#0c0c0c"; ctx.fillRect(0, 0, W, H)
+  ctx.font = `700 ${CELL + 1}px "Geist Mono"`; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    const v = d[(y * COLS + x) * 4] / 255
+    const ch = RAMP[Math.min(RAMP.length - 1, Math.floor(v * RAMP.length))]
+    if (ch === " ") continue
+    ctx.fillStyle = `rgba(235,235,235,${(.25 + v * .75).toFixed(2)})`
+    ctx.fillText(ch, x * CELL + CELL / 2, y * CELL + CELL / 2 + 1)
+  }
+  domeLights(t)
+  roadster(t)
+
+  // footer: who this is, and the music credit
+  const cr = window.CREDITS && window.CREDITS.length ? window.CREDITS : ['"Tejano Lofi" by Patrick · made with Suno']
+  const ln = cr[Math.floor(t / 15) % cr.length]
+  ctx.textAlign = "right"; ctx.textBaseline = "alphabetic"
+  ctx.font = '500 20px "Geist"'; ctx.fillStyle = "rgba(255,255,255,0.75)"
+  ctx.fillText("♪  " + ln, W - 60, H - 52)
+  ctx.textAlign = "left"; ctx.font = '700 22px "Geist Mono"'; ctx.fillStyle = "rgba(255,255,255,0.8)"
+  ctx.letterSpacing = "3px"; ctx.fillText("DEVSA FM  ·  devsa.community", 60, H - 52); ctx.letterSpacing = "0px"
+  const tw = 46
+  ;[TEAL, PINK, ORANGE].forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(60 + i * (tw + 6), H - 40, tw, 6) })
+}
+
+window.render = render
+window.ready = Promise.all([document.fonts.load('700 20px "Geist Mono"'), document.fonts.load('500 20px "Geist"'), loadIcons(),
+  PENGUIN.complete ? 0 : new Promise(r => { PENGUIN.onload = r; PENGUIN.onerror = r })])
+  .then(() => { paint(0); return new Promise(r => setTimeout(r, 300)) })
+window.ready.then(() => {
+  if (new URLSearchParams(location.search).has("still")) return render(8)
+  const t0 = performance.now()
+  ;(function loop() { render((performance.now() - t0) / 1000); requestAnimationFrame(loop) })()
+})
+</script>
+</body>
+</html>

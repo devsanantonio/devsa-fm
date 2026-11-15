@@ -1,0 +1,63 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!--
+  DEVSA FM, the Instagram cover (slide 1 of the carousel): 1080x1350. The River Walk as the hero,
+  the other five scenes smaller below, "music to build to" with a play button up top. Type in
+  Geist Pixel. No logo. Earlier versions: post-grid-v1.html (six equal tiles), post-with-mark.html.
+  Render with: node shot.cjs
+-->
+<script>if (location.search.includes("overlay")) document.documentElement.classList.add("overlay")</script>
+<style>
+  /* ?overlay: the text and labels only, the scene areas left clear, for compositing over the moving scenes */
+  .overlay, .overlay body { background: transparent !important }
+  .overlay .tile, .overlay .frame { background-image: none !important; background-color: transparent !important }
+  @font-face { font-family: "Geist Pixel"; src: url(GeistPixel-Square.woff2) format("woff2"); }
+  @font-face { font-family: "Geist"; font-weight: 500; src: url(../scene/fonts/Geist-Medium.woff2) format("woff2"); }
+  html, body { margin: 0; width: 1080px; height: 1350px; overflow: hidden; background: #0c0c0c; color: #f2f2f2 }
+  .px { font-family: "Geist Pixel"; font-weight: 400 }
+  .top { position: absolute; left: 52px; right: 52px; top: 46px; height: 140px; display: flex; justify-content: space-between; align-items: center }
+  .title { font-size: 108px; line-height: 1; letter-spacing: 2px; white-space: nowrap }
+  .listen { display: flex; align-items: center; gap: 16px }
+  .play { width: 74px; height: 74px; border-radius: 50%; background: #ffcf6a; display: grid; place-items: center }
+  .play i { display: block; width: 0; height: 0; border-left: 26px solid #0c0c0c; border-top: 16px solid transparent; border-bottom: 16px solid transparent; margin-left: 7px }
+  .listen span { font-size: 32px; line-height: 1.15; color: #ffcf6a }
+  .tile { position: absolute; background-repeat: no-repeat; background-color: #0c0c0c; overflow: hidden }
+  .tile span { position: absolute; left: 12px; bottom: 10px; font-family: "Geist Pixel"; font-size: 20px; letter-spacing: 1px; color: #fff; background: rgba(10,10,12,.82); padding: 5px 9px 3px; border-radius: 4px }
+  .hero span { font-size: 26px; left: auto; right: 18px; bottom: 16px; padding: 7px 12px 5px }
+  .bottom { position: absolute; left: 52px; right: 52px; bottom: 22px }
+  .bars { display: flex; gap: 8px; margin-bottom: 14px } .bars i { display: block; width: 64px; height: 8px }
+  .bars i:nth-child(1) { background: #00b2a9 } .bars i:nth-child(2) { background: #ef426f } .bars i:nth-child(3) { background: #ff8200 }
+  .row { display: flex; justify-content: space-between; align-items: flex-end }
+  .lofi { font-size: 32px; line-height: 1.2; color: rgba(242,242,242,.92) }
+  .credit { margin-top: 12px; font-family: "Geist"; font-weight: 500; font-size: 19px; color: rgba(242,242,242,.55) }
+  .watch { font-size: 38px; text-align: right; line-height: 1.1 } .watch b { color: #ffcf6a; font-weight: 400 }
+</style>
+</head>
+<body>
+  <div class="top">
+    <div class="px title">DEVSA FM</div>
+    <div class="listen"><div class="play"><i></i></div><span class="px">music<br>to build to</span></div>
+  </div>
+  <!-- the hero: the River Walk -->
+  <div class="tile hero" style="left:0;top:206px;width:1080px;height:470px;background-image:url(rw-26.7.png);background-size:1100px auto;background-position:-10px -50px"><span>a night on the River Walk</span></div>
+  <!-- the game and the food truck -->
+  <div class="tile" style="left:0;top:680px;width:538px;height:290px;background-image:url(court-24.png);background-size:1133px auto;background-position:-466px -250px"><span>the game</span></div>
+  <div class="tile" style="left:542px;top:680px;width:538px;height:290px;background-image:url(taco-206.png);background-size:804px auto;background-position:-84px -92px"><span>the food truck</span></div>
+  <!-- the bus, the bridge, the Rand -->
+  <div class="tile" style="left:0;top:974px;width:357px;height:200px;background-image:url(commute-21.png);background-size:460px auto;background-position:-50px -36px"><span>the night bus</span></div>
+  <div class="tile" style="left:361px;top:974px;width:358px;height:200px;background-image:url(fish-10.png);background-size:460px auto;background-position:-50px -14px"><span>under the bridge</span></div>
+  <div class="tile" style="left:723px;top:974px;width:357px;height:200px;background-image:url(rand-4.995.png);background-size:460px auto;background-position:-50px -28px"><span>the Rand</span></div>
+  <div class="bottom">
+    <div class="row">
+      <div>
+        <div class="bars"><i></i><i></i><i></i></div>
+        <div class="px lofi">Tejano lofi radio<br>for the city's learners and builders</div>
+      </div>
+      <div class="px watch">on YouTube<br><b>@devsatx</b></div>
+    </div>
+    <div class="credit">"Tejano Lofi" by Patrick · made with Suno</div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,76 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!--
+  DEVSA FM, the carousel after the cover: slide.html?n=1..6 is one scene each (a big frame and the
+  one idea behind it), ?n=7 is the closing "put it on" slide. 1080x1350, Geist Pixel.
+  Render with: node shot.cjs  (writes devsa-fm-carousel-02.png ... -08.png)
+-->
+<script>if (location.search.includes("overlay")) document.documentElement.classList.add("overlay")</script>
+<style>
+  /* ?overlay: the text and labels only, the scene areas left clear, for compositing over the moving scenes */
+  .overlay, .overlay body { background: transparent !important }
+  .overlay .tile, .overlay .frame { background-image: none !important; background-color: transparent !important }
+  @font-face { font-family: "Geist Pixel"; src: url(GeistPixel-Square.woff2) format("woff2"); }
+  @font-face { font-family: "Geist Mono"; font-weight: 700; src: url(../scene/fonts/GeistMono-Bold.woff2) format("woff2"); }
+  @font-face { font-family: "Geist"; font-weight: 500; src: url(../scene/fonts/Geist-Medium.woff2) format("woff2"); }
+  html, body { margin: 0; width: 1080px; height: 1350px; overflow: hidden; background: #0c0c0c; color: #f2f2f2 }
+  .px { font-family: "Geist Pixel"; font-weight: 400 }
+  .head { position: absolute; left: 52px; right: 52px; top: 48px; display: flex; justify-content: space-between; font-size: 30px; color: rgba(242,242,242,.7) }
+  .frame { position: absolute; left: 0; top: 0; width: 1080px; height: 910px; background-repeat: no-repeat; background-color: #0c0c0c }
+  .copy { position: absolute; left: 52px; right: 52px; top: 950px }
+  .name { font-size: 76px; line-height: 1; margin-bottom: 26px; display: flex; justify-content: space-between; align-items: baseline }
+  .name em { font-style: normal; font-size: 30px; color: #ffcf6a }
+  /* the footer, as on the live stream: who this is bottom left over the brand bars, the music bottom right */
+  .foot { position: absolute; left: 52px; right: 52px; bottom: 58px; display: flex; justify-content: space-between; align-items: baseline }
+  .foot .who { font-family: "Geist Mono"; font-weight: 700; font-size: 22px; letter-spacing: 3px; color: rgba(255,255,255,.8) }
+  .foot .song { font-family: "Geist"; font-weight: 500; font-size: 20px; color: rgba(255,255,255,.75) }
+  .fbars { position: absolute; left: 52px; bottom: 40px; display: flex; gap: 6px } .fbars i { display: block; width: 46px; height: 6px }
+  .fbars i:nth-child(1) { background: #00b2a9 } .fbars i:nth-child(2) { background: #ef426f } .fbars i:nth-child(3) { background: #ff8200 }
+  .line { font-family: "Geist"; font-weight: 500; font-size: 36px; line-height: 1.32; color: rgba(242,242,242,.9) }
+  .line b { font-weight: 500; color: #ffcf6a }
+  .bars { position: absolute; left: 52px; bottom: 54px; display: flex; gap: 8px } .bars i { display: block; width: 52px; height: 7px }
+  .bars i:nth-child(1) { background: #00b2a9 } .bars i:nth-child(2) { background: #ef426f } .bars i:nth-child(3) { background: #ff8200 }
+  .handle { position: absolute; right: 52px; bottom: 44px; font-size: 28px; color: #ffcf6a }
+  /* the closing slide */
+  .end { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; padding: 0 80px }
+  .end .big { font-size: 96px; line-height: 1.05 }
+  .end .play { width: 120px; height: 120px; border-radius: 50%; background: #ffcf6a; display: grid; place-items: center; margin-bottom: 56px }
+  .end .play i { display: block; width: 0; height: 0; border-left: 42px solid #0c0c0c; border-top: 26px solid transparent; border-bottom: 26px solid transparent; margin-left: 12px }
+  .end .where { font-size: 54px; margin-top: 52px; color: #ffcf6a }
+  .end .small { font-family: "Geist"; font-weight: 500; font-size: 30px; line-height: 1.4; margin-top: 40px; color: rgba(242,242,242,.75) }
+</style>
+</head>
+<body>
+<script>
+// [frame, name, the idea, background-size, background-position]
+const SCENES = [
+  ["commute-21.png", "the night bus", "A bus past Mission San José and the big boots, the streetlamps sliding across its windows. <b>The stickers on the glass are DEVSA TV's.</b>", "1350px auto", "-118px 214px"],
+  ["fish-10.png", "under the bridge", "Glowing sunfish under the bridge on the Museum Reach, a nod to Donald Lipski's <b>F.I.S.H.</b> A wave of light rolls through them.", "1765px auto", "-341px 0px"],
+  ["court-final.png", "the game", "Two AI agents, one game. <b>Patch runs a ReAct loop, Lint runs reflection.</b> Lint critiques every late contest, learns to block, and wins it at the buzzer.", "1765px auto", "-341px -23px"],
+  ["taco-206.png", "the food truck", "Midnight at the Alamo Python truck. <b>The Linux San Antonio penguin ships a localhost:210 starter</b> before the song ends: one failing test, one review, live.", "1765px auto", "-265px 0px"],
+  ["rand-4.995.png", "the Rand", "The PySanAntonio mascot plays in front of the Rand Building. <b>The windows light up on the song's real beat</b> and spell >SA_.", "1765px auto", "-341px 0px"],
+  ["rw-26.7.png", "the River Walk", "The boat drifts down the river under the cypress lights, past the café umbrellas, <b>and out under the bridge</b> to close the night.", "1765px auto", "-341px 0px"],
+]
+const n = +(new URLSearchParams(location.search).get("n") || 1)
+if (n <= 6) {
+  const [img, name, idea, size, pos] = SCENES[n - 1]
+  document.body.insertAdjacentHTML("beforeend", `
+    <div class="frame" style="background-image:url(${img});background-size:${size};background-position:${pos}"></div>
+    <div class="copy"><div class="name px"><span>${name}</span><em>YouTube @devsatx</em></div><div class="line">${idea}</div></div>
+    <div class="foot"><span class="who">DEVSA FM  ·  devsa.community</span><span class="song">♪  "Tejano Lofi" by Patrick · made with Suno</span></div>
+    <div class="fbars"><i></i><i></i><i></i></div>`)
+} else {
+  document.body.insertAdjacentHTML("beforeend", `
+    <div class="end">
+      <div class="play"><i></i></div>
+      <div class="big px">Put it on<br>while you build.</div>
+      <div class="where px">YouTube @devsatx</div>
+      <div class="small">Tejano lofi radio for San Antonio's learners and builders.<br>A new scene with every song.<br>"Tejano Lofi" by Patrick · made with Suno</div>
+    </div>
+    <div class="bars"><i></i><i></i><i></i></div>`)
+}
+</script>
+</body>
+</html>

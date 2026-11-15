@@ -1,0 +1,617 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: "Geist Mono"; font-weight: 700; src: url(fonts/GeistMono-Bold.woff2) format("woff2"); }
+  @font-face { font-family: "Geist"; font-weight: 500; src: url(fonts/Geist-Medium.woff2) format("woff2"); }
+  html, body { margin: 0; background: #0c0c0c; overflow: hidden }
+  canvas { display: block }
+</style>
+</head>
+<body>
+<!--
+  DEVSA FM, the court: a night game in an arena, in the River Walk's night style. The stands are
+  ASCII (a crowd that nods along and stands up when a shot drops, flashbulbs, rafters and lights);
+  the court is in colour, a lit hardwood floor in perspective with the DEVSA alt mark at centre court,
+  as shipped. A possession every 15 seconds: the drive, a jumper, the swish, and back up the floor.
+  A whole game to one song: the arena goes dark for the introductions (spotlights, each bot
+  running out to its card), the lights come up, a jump ball, then possessions back and forth,
+  teal attacking the right hoop and pink the left, the score kept on the board. Two bots, agents
+  running their loops: each wears a status chip, plan -> act -> observe. They run with strides
+  that match the ground they cover, lean into it, and the defender slides; the ball handler
+  crosses over before the drive.
+  The floor takes its look from an NBA court (pale maple, black lanes, black lines, a dark border),
+  with none of anyone's marks: the DEVSA alt mark at centre court, no circle.
+  No team names or marks: the teams are just teal and pink.
+  1920x1080. Synced (render.cjs SYNC=...): the loop is the song, with the song inside it, so the
+  intro plays as each song starts. On its own it runs a two-minute game. render(t) draws a frame.
+-->
+<canvas id="c" width="1920" height="1080"></canvas>
+<script src="plush.js"></script>
+<script>
+const B = window.BEATS || null
+const T = window.LOOP_T || 120, W = 1920, H = 1080, TAU = Math.PI * 2
+const TEAL = "#00b2a9", PINK = "#ef426f", ORANGE = "#ff8200"
+const BPM = B ? B.bpm : 76
+const ctx = document.getElementById("c").getContext("2d")
+const CELL = 12, COLS = W / CELL, ROWS = H / CELL      // 160 x 90 characters
+const RAMP = " .,:;-=+*#%@"
+
+const sc = document.createElement("canvas"); sc.width = COLS; sc.height = ROWS
+const g = sc.getContext("2d", { willReadFrequently: true })
+const gray = v => { const c = Math.round(Math.max(0, Math.min(1, v)) * 255); return `rgb(${c},${c},${c})` }
+function box(x, y, w, h, v) { g.fillStyle = gray(v); g.fillRect(x, y, w, h) }
+const hash = (a, b) => { const s = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return s - Math.floor(s) }
+const lerp = (a, b, p) => a + (b - a) * p
+const clamp01 = p => Math.max(0, Math.min(1, p))
+const ease = p => { p = clamp01(p); return p * p * (3 - 2 * p) }
+const span = (c, a, b) => clamp01((c - a) / (b - a))
+
+
+// --- the court, in feet (94 x 50), mapped into the picture in perspective ---
+const FAR = 520, NEAR = 1000                       // the far and near sidelines, in pixels
+const xl = v => 330 - 270 * v, xr = v => 1590 + 270 * v
+const at = (u, v) => [xl(v / 50) + (u / 94) * (xr(v / 50) - xl(v / 50)), FAR + (v / 50) * (NEAR - FAR)]   // u: 0..94 ft along, v: 0..50 ft across
+const kAt = v => (xr(v / 50) - xl(v / 50)) / 94   // pixels per foot at that depth (v in ft)
+const lift = (u, v, h) => { const [x, y] = at(u, v); return [x, y - h * kAt(v)] }          // a point h ft above the floor
+const mix2 = (a, b, p) => ({ u: lerp(a.u, b.u, p), v: lerp(a.v, b.v, p) })
+
+// --- the game: introductions, the tip, then possessions back and forth ---
+const INTRO = 14, TIP = 18, POSS = 16
+const HOOP = dir => dir > 0 ? 94 - 5.25 : 5.25
+// two agents, two agent patterns: Patch runs a ReAct loop, Lint a reflection loop
+const TEAM = [{ jersey: TEAL, number: "7", name: "PATCH", seed: 0, pattern: "ReAct", loop: "reason → act → observe" },
+              { jersey: PINK, number: "3", name: "LINT", seed: 1.7, pattern: "reflection", loop: "draft → critique → revise" }]
+
+// --- the game, scripted across the song ---
+// Patch hits jumpers while Lint's contests come late; Lint critiques itself and blocks one; Patch
+// adapts and drives; a timeout halfway (a software factory on the board); then a tie, and Lint
+// revises its own rushed shot into a step-back at the buzzer.
+const PLAYS = [ // [attacker, style, outcome]
+  [0, "jumper", "make"], [1, "jumper", "make"], [0, "jumper", "make"], [1, "jumper", "make"], [0, "jumper", "block"],
+  [1, "jumper", "make"], [0, "drive", "make"], [1, "jumper", "make"], [0, "drive", "make"], [1, "buzzer", "make"]]
+const TIMEOUT = [98, 122]
+const STARTS = []; { let s0 = TIP; PLAYS.forEach((_, i) => { if (i === 5) s0 = TIMEOUT[1]; STARTS.push(s0); s0 += POSS }) }
+const WARP = 5.95                                  // the last possession runs long: a probe before the play
+const GAME_END = STARTS[9] + 10.8 + WARP + .35     // the buzzer, just after the last shot drops
+const GAME_LEN = GAME_END - TIP - (TIMEOUT[1] - TIMEOUT[0])
+
+// the thought bubbles: [play, attacker (A) or defender (D), from, to, text]
+const THOUGHTS = [
+  [0, "A", 5.4, 7.6, "#3 sags → pull up"], [0, "D", 11.6, 15.2, "contest was late → close out sooner"],
+  [1, "A", 5.2, 7.4, "#7 leans right → cross left"],
+  [2, "A", 5.4, 7.6, "still open → pull up again"], [2, "D", 11.6, 15.2, "late again → jump at the gather"],
+  [3, "A", 5.2, 7.4, "revise: quicker release"],
+  [4, "D", 6.2, 9.0, "critique says: jump at the gather"], [4, "A", 11.4, 15.4, "jumper blocked → drive instead"],
+  [5, "A", 5.2, 7.4, "#7 is rattled → attack"],
+  [6, "A", 5.4, 7.6, "#3 jumps early → drive past"], [6, "D", 11.6, 15.2, "it drives now → don't bite"],
+  [8, "A", 5.4, 7.6, "drive worked → again"],
+  [9, "A", 6.6, 9.4, "rushed it last time → step back"], [9, "D", 9.2, 11.6, "she'll drive → sag off"],
+]
+
+function possession(i, c) {
+  const [att, style, outcome] = PLAYS[i], dir = att === 0 ? 1 : -1, hp = HOOP(dir), side = (i >> 1) % 2 ? -1 : 1
+  const final = style === "buzzer"
+  const cc = final ? (c < 6 ? c : c < 6 + WARP ? 6 : c - WARP) : c          // the final play's probe holds the clock
+  let A0, D0
+  if (i === 0) { A0 = { u: 42, v: 25 }; D0 = { u: 48.5, v: 25 } }
+  else { const e = ends(i - 1); A0 = e[att]; D0 = e[1 - att] }
+  const Q = { u: hp - dir * 26, v: 25 + 3 * side }, X = { u: hp - dir * 24, v: 25 - 3 * side }
+  const R = { u: hp - dir * (style === "drive" ? 5.5 : final ? 17 : 13), v: 25 - 2 * side }, E = { u: hp - dir * 22, v: 22 }
+  const G = { u: hp - dir * (final ? 15 : 21), v: 25 }, Rb = { u: hp + dir * 3.3, v: 27 }, L = { u: hp - dir * 17, v: 34 }
+  const aAt = c => c < 1.2 ? A0 : c < 6 ? mix2(A0, Q, ease(span(c, 1.2, 6))) : c < 6.6 ? Q : c < 7.2 ? mix2(Q, X, ease(span(c, 6.6, 7.2)))
+    : c < 9.2 ? mix2(X, R, ease(span(c, 7.2, 9.2))) : c < 11.2 || final ? R : mix2(R, E, ease(span(c, 11.2, 15.5)))
+  let a = aAt(cc)
+  if (final && c >= 6 && c < 6 + WARP) a = { u: Q.u, v: Q.v + Math.sin((c - 6) * 1.7) * 2.4 }   // probing at the top
+  const lift = style === "drive" ? 2.2 : 2.8, aj = Math.sin(Math.PI * span(cc, 9.2, 10)) * lift
+  const block = outcome === "block"
+  // the defender
+  const lag = aAt(Math.max(6, cc - .35)), gap = final ? 6 : 3.8
+  let d
+  if (cc < 1.2) d = D0
+  else if (cc < 6) d = mix2(D0, G, ease(span(cc, 1.0, 5.6)))
+  else if (cc < 9.2) d = mix2(G, { u: lag.u + dir * gap, v: lag.v - 3 }, ease(span(cc, 6, 6.8)))
+  else { const l = aAt(8.85), d9 = { u: l.u + dir * gap, v: l.v - 3 }
+    if (cc < 10) d = d9
+    else if (block) d = cc < 12.2 ? mix2(d9, L, ease(span(cc, 10.1, 12.2))) : L
+    else if (final) d = d9
+    else d = cc < 12.4 ? mix2(d9, Rb, ease(span(cc, 10.4, 12.4))) : Rb }
+  const dj = block ? Math.sin(Math.PI * span(cc, 9.15, 9.95)) * 3.3 : Math.sin(Math.PI * span(cc, 9.35, 10)) * 2.2
+  const sliding = cc > 6 && cc < 9.2
+  // the ball
+  let ball
+  const hand = cc < 6.6 ? side : cc < 7.2 ? lerp(side, -side, ease(span(cc, 6.6, 7.2))) : -side
+  const period = cc > 7.2 ? .34 : .42
+  if (cc < 1.2) ball = { u: a.u, v: a.v + .4, h: 4.2 }
+  else if (cc < 9.25) { const low = cc > 6.6 && cc < 7.2 ? .5 : 1
+    ball = { u: a.u + hand * 1.5, v: a.v + .6, h: .6 + 2.6 * low * Math.abs(Math.cos(Math.PI * c / period)) } }
+  else if (cc < 9.6) { const p = span(cc, 9.25, 9.6); ball = { u: a.u, v: a.v + .3, h: lerp(3.5, 8.6, p) + aj } }
+  else if (block && cc < 9.8) { const p = span(cc, 9.6, 9.8), r0 = aAt(9.6); ball = { u: lerp(r0.u, r0.u + dir * 2.4, p), v: r0.v, h: 8.6 + 2.6 + p * 1.2 } }
+  else if (block && cc < 12.2) { const p = span(cc, 9.8, 12.2), r0 = aAt(9.6), b0 = { u: r0.u + dir * 2.4, v: r0.v }
+    ball = { u: lerp(b0.u, L.u, Math.min(1, p * 1.4)), v: lerp(b0.v, L.v + .4, Math.min(1, p * 1.4)), h: 12.4 * Math.abs(Math.cos(Math.PI * p * 1.5)) * (1 - p * .7) } }
+  else if (block) ball = { u: d.u, v: d.v + .4, h: cc < 12.6 ? lerp(.4, 4.2, span(cc, 12.2, 12.6)) : 4.2 }
+  else if (cc < 10.8) { const p = span(cc, 9.6, 10.8), r0 = aAt(9.6), apex = style === "drive" ? 1.6 : final ? 6.5 : 5
+    ball = { u: lerp(r0.u, hp, p), v: lerp(r0.v, 25, p), h: lerp(8.6 + lift * .9, 10.2, p) + 4 * apex * p * (1 - p) } }
+  else if (cc < 11.15) ball = { u: hp, v: 25, h: lerp(10.2, 6.6, span(cc, 10.8, 11.15)) }
+  else if (cc < 12.4 || final) { const p = span(cc, 11.15, 12.4); ball = { u: lerp(hp, hp + dir * 2.6, p), v: lerp(25, 26.6, p), h: 6.6 * Math.abs(Math.cos(Math.PI * p * 1.5)) * (1 - p * .6) * (p < 1 ? 1 : 0) } }
+  else if (cc < 12.8) { const p = ease(span(cc, 12.4, 12.8)); ball = { u: lerp(hp + dir * 2.6, d.u, p), v: lerp(26.6, d.v + .4, p), h: lerp(.4, 4.2, p) } }
+  else ball = { u: d.u, v: d.v + .4, h: 4.2 + Math.sin(c * 5) * .15 }
+  // what each agent says, in its own pattern's words
+  const SAY_A = att === 0
+    ? [[1.2, "observe · inbound"], [6, "reason · bring it up"], [6.6, "reason · read #3"], [7.2, "act · crossover"], [9.2, style === "drive" ? "act · drive to the rim" : "act · drive"], [10.8, style === "drive" ? "act · layup" : "act · pull-up"]]
+    : [[1.2, "draft · inbound"], [6, "draft · bring it up"], [6.6, "critique · #7 is set"], [7.2, "revise · crossover"], [9.2, "revise · drive"], [10.8, final ? "revise · step-back" : "act · pull-up"]]
+  const SAY_D = att === 1
+    ? [[1.2, "observe · #3"], [6, "act · get back"], [9.2, "act · slide"], [10.8, "act · contest"]]
+    : [[1.2, "draft · watch #7"], [6, "act · get back"], [9.2, block ? "revise · close out early" : "revise · slide left"], [10.8, block ? "act · block!" : "act · contest"]]
+  const afterA = block ? [[12.6, "observe · blocked"], [16, "reason · drive next"]] : final ? [[99, "✓ at the buzzer"]] : [[12.6, (att ? "critique · " : "observe · ") + "✓ +2"], [16, att ? "draft · get back" : "reason · get back"]]
+  const afterD = block ? [[12.6, "✓ revise worked · block"], [16, "draft · inbound"]] : final ? [[99, "observe · no time left"]] : [[12.4, att === 1 ? "observe · rebound" : "critique · too late"], [16, att === 1 ? "act · inbound" : "draft · inbound"]]
+  const aStatus = step(cc, [...SAY_A, ...afterA]), dStatus = step(cc, [...SAY_D, ...afterD])
+  const bots = []
+  const won = final && cc > 10.8
+  bots[att] = { ...a, h: aj, armsUp: (cc > 9.3 && cc < 10.7) || won, hold: cc < 1.2 || (cc > 9.25 && cc < 9.6), status: aStatus, slide: false, mouth: won ? 1 : 0 }
+  bots[1 - att] = { ...d, h: dj, armsUp: (block ? cc > 9.1 && cc < 10.1 : cc > 9.35 && cc < 10.2), armsWide: sliding, hold: block ? cc > 12.4 : cc > 12.6 && !final, status: dStatus, slide: sliding, mouth: block && cc > 9.8 && cc < 12.6 ? 1 : 0 }
+  const made = !block && cc >= 10.8
+  const cheer = made && cc < 13.6 ? Math.sin(Math.PI * span(cc, 10.8, 13.6)) : block && cc > 9.8 && cc < 12.4 ? Math.sin(Math.PI * span(cc, 9.8, 12.4)) * .8 : 0
+  return { bots, ball, swish: made ? span(cc, 10.8, 11.4) : 0, dir, made, cheer, clock: Math.max(0, 24 - Math.max(0, cc - 1.2)), att, i, c }
+}
+// where both agents are when play i ends (the next play starts from there)
+function ends(i) {
+  const [att, , outcome] = PLAYS[i], dir = att === 0 ? 1 : -1, hp = HOOP(dir), e = []
+  e[att] = { u: hp - dir * 22, v: 22 }
+  e[1 - att] = outcome === "block" ? { u: hp - dir * 17, v: 34 } : { u: hp + dir * 3.3, v: 27 }
+  return e
+}
+
+// the introductions and the tip
+function opening(t) {
+  const tealAt = t < 2 ? { u: -8, v: 12 } : t < 6.5 ? mix2({ u: -8, v: 12 }, { u: 40, v: 25 }, ease(span(t, 2, 6.5))) : t < 12 ? { u: 40, v: 25 } : t < 14 ? mix2({ u: 40, v: 25 }, { u: 45.2, v: 25 }, ease(span(t, 12, 13.6)))
+    : t < 15.6 ? { u: 45.2, v: 25 } : t < 16.4 ? mix2({ u: 45.2, v: 25 }, { u: 42, v: 25 }, ease(span(t, 15.6, 16.4))) : { u: 42, v: 25 }
+  const pinkAt = t < 7 ? { u: 102, v: 12 } : t < 11.5 ? mix2({ u: 102, v: 12 }, { u: 54, v: 25 }, ease(span(t, 7, 11.5))) : t < 12 ? { u: 54, v: 25 } : t < 14 ? mix2({ u: 54, v: 25 }, { u: 48.8, v: 25 }, ease(span(t, 12, 13.6)))
+    : t < 15.6 ? { u: 48.8, v: 25 } : mix2({ u: 48.8, v: 25 }, { u: 48.5, v: 25 }, ease(span(t, 15.6, 17)))
+  const tj = Math.sin(Math.PI * span(t, 14.8, 15.6)) * 3, pj = Math.sin(Math.PI * span(t, 14.85, 15.55)) * 2.6
+  let ball = null
+  if (t >= 14 && t < 15.35) { const p = span(t, 14, 15.2); ball = { u: 47, v: 25, h: lerp(3, 13, 1 - (1 - p) * (1 - p)) } }       // tossed up at centre
+  else if (t >= 15.35 && t < 16.4) { const p = span(t, 15.35, 16.4); ball = { u: lerp(47, 42, p), v: 25.4, h: lerp(13, 4.2, p) + 3 * p * (1 - p) } }   // tipped to Patch
+  else if (t >= 16.4) ball = { u: 42, v: 25.4, h: 4.2 }
+  const intro = t < INTRO
+  const s7 = t < 2 ? "reason · warm up" : t < 6.5 ? "act · run out" : t < 14 ? "observe · the crowd" : t < 15.6 ? "act · jump ball" : "observe · ✓ won the tip"
+  const s3 = t < 7 ? "draft · warm up" : t < 11.5 ? "act · run out" : t < 14 ? "critique · the crowd" : t < 15.6 ? "act · jump ball" : "revise · get back"
+  return { bots: [{ ...tealAt, h: tj, armsUp: t > 14.8 && t < 15.6, hold: t >= 16.4, status: s7, hidden: t < 2 }, { ...pinkAt, h: pj, armsUp: t > 14.85 && t < 15.5, status: s3, hidden: t < 7 }],
+    ball, swish: 0, dir: 1, cheer: (t > 2 && t < 12) ? .6 : 0, clock: 24, intro, feature: t >= 2 && t < 7 ? 0 : t >= 7 && t < 12 ? 1 : -1 }
+}
+
+// the timeout: both agents walk to the far sideline to huddle, then back to where they were
+function timeout(t) {
+  const e = ends(4), hud = [{ u: 41, v: 3 }, { u: 53, v: 3 }]
+  const p = ease(span(t, TIMEOUT[0], TIMEOUT[0] + 3)) * (1 - ease(span(t, TIMEOUT[1] - 3, TIMEOUT[1])))
+  const bots = [0, 1].map(b => ({ ...mix2(e[b], hud[b], p), h: 0, status: b === 0 ? (t < 110 ? "reason · new plan" : "plan · drive more") : (t < 110 ? "critique · review the tape" : "revise · jump earlier") }))
+  bots[1].hold = true
+  return { bots, ball: { u: bots[1].u, v: bots[1].v + .4, h: 4.2 }, swish: 0, dir: 1, cheer: 0, clock: 24, timeout: true }
+}
+
+function stateAt(t) {
+  if (t < TIP) return opening(t)
+  if (t >= TIMEOUT[0] && t < TIMEOUT[1]) return timeout(t)
+  let i = STARTS.length - 1; while (i > 0 && t < STARTS[i]) i--
+  return possession(i, t - STARTS[i])
+}
+function scoreAt(t) {
+  const s = [0, 0]
+  PLAYS.forEach(([att, style, outcome], i) => { const at2 = STARTS[i] + 10.8 + (style === "buzzer" ? WARP : 0); if (outcome === "make" && t >= at2) s[att] += 2 })
+  return s
+}
+// the game clock: the song's time left in play, stopped for the timeout, zero at the buzzer
+function gameClock(t) {
+  if (t < TIP) return GAME_LEN
+  const played = Math.min(t, TIMEOUT[0]) - TIP + Math.max(0, t - TIMEOUT[1])
+  return Math.max(0, GAME_LEN - played)
+}
+// whose thought is showing, if anyone's
+function thoughtAt(t) {
+  if (t < TIP || (t >= TIMEOUT[0] && t < TIMEOUT[1])) return null
+  let i = STARTS.length - 1; while (i > 0 && t < STARTS[i]) i--
+  const c = t - STARTS[i], att = PLAYS[i][0]
+  for (const [pi, who, a0, a1, text] of THOUGHTS) if (pi === i && c >= a0 && c < a1) return { b: who === "A" ? att : 1 - att, text, a: Math.min(1, span(c, a0, a0 + .4)) * (1 - span(c, a1 - .4, a1)) }
+  return null
+}
+
+// strides that match the ground covered: each bot's distance travelled, worked out once
+const FPS = 30, TRACK = [[], []]
+function buildTracks() {
+  const n = Math.ceil(T * FPS) + 2
+  for (let i = 0; i < n; i++) {
+    const st = stateAt(Math.min(T - 1e-6, i / FPS))
+    for (const b of [0, 1]) {
+      const p = st.bots[b], prev = TRACK[b][i - 1]
+      const dd = prev ? Math.hypot(p.u - prev.u, p.v - prev.v) : 0
+      TRACK[b].push({ u: p.u, v: p.v, dist: (prev ? prev.dist : 0) + dd })
+    }
+  }
+}
+function motion(b, t) {
+  const tr = TRACK[b], i = Math.max(1, Math.min(tr.length - 2, Math.round(t * FPS)))
+  const vu = (tr[i + 1].u - tr[i - 1].u) * FPS / 2, vv = (tr[i + 1].v - tr[i - 1].v) * FPS / 2
+  return { stride: tr[i].dist * .3, speed: Math.hypot(vu, vv), vu, vv }
+}
+
+const step = (c, steps) => steps.find(([end]) => c < end)[1]
+
+// --- the stands, rafters and lights, in ASCII ---
+function paint(t, st) {
+  const beat = (t * BPM / 60) % 1, cheer = Math.max(st.cheer, t > GAME_END ? 1 : 0), hold = st.timeout
+  box(0, 0, COLS, ROWS, .03)
+  for (let x = 0; x < COLS; x += 2) box(x, 6, 1, 1, .14)
+  for (let x = 6; x < COLS; x += 16) { box(x, 3, 1, 3, .18); box(x - 1, 6, 3, 1, st.intro ? .35 : 1) }   // the lights, dimmed for the intros
+  for (let row = 0; row < 12; row++) {
+    const y = 14 + row * 2.5, v = .14 + row * .028
+    for (let x = 1 + (row % 2) * 1.5; x < COLS; x += 3) {
+      const up = cheer * (hash(x, row) > .35 ? 1 : 0)
+      const nod = !hold && (Math.floor(t * BPM / 60) + x) % 2 === 0 && beat < .3 ? 1 : 0
+      const hy = Math.round(y - up * 1.4 - (up ? 0 : nod * .5)), dim = hold ? .55 : 1
+      box(Math.round(x), hy, 1, 1, (v + .12) * dim)
+      box(Math.round(x) - 1, hy + 1, 3, 1, v * dim)
+      if (up && hash(x, row + 9) > .5) box(Math.round(x) + (hash(x, row) > .7 ? 1 : -1), hy - 2, 1, 2, v + .1)
+    }
+  }
+  box(0, 26, COLS, 1, .1)
+  const n = hold ? 0 : 3 + Math.round(cheer * 24) + (st.intro ? 14 : 0)
+  for (let i = 0; i < n; i++) {
+    const k = Math.floor(t * 6) * 31 + i
+    if (hash(k, 3) > .6) box(Math.floor(hash(k, 1) * COLS), 14 + Math.floor(hash(k, 2) * 28), 1, 1, 1)
+  }
+  box(0, 42, COLS, 1, .32)
+}
+// --- the court and the game, in colour ---
+const LOGO = new Image(); LOGO.src = "devsa-alt-logo.svg"    // the DEVSA alt mark, as shipped
+
+
+function poly(points) { ctx.beginPath(); points.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath() }
+function line(points) { ctx.beginPath(); points.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)) }
+const arc = (cu, cv, r, a0, a1, n = 48) => Array.from({ length: n + 1 }, (_, i) => { const a = a0 + (a1 - a0) * i / n; return at(cu + Math.cos(a) * r, cv + Math.sin(a) * r) })
+
+// the planks: rows of maple boards along the court, each board its own shade (made once)
+const PLANKS = []
+{ let sd = 7; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647
+  for (let v = 0; v < 50; v += .55) { let u = -r() * 6; while (u < 94) { const len = 4 + r() * 9; PLANKS.push([Math.max(0, u), Math.min(94, u + len), v, r()]); u += len } } }
+
+function court(t) {
+  // out of bounds: a dark border all round, as on an NBA floor
+  poly([at(-5, -3.5), at(99, -3.5), at(99, 53.5), at(-5, 53.5)]); ctx.fillStyle = "#1c1c1e"; ctx.fill()
+  // the floor: pale maple, board by board
+  const FLOOR = [at(0, 0), at(94, 0), at(94, 50), at(0, 50)]
+  poly(FLOOR); ctx.fillStyle = "#e3c99a"; ctx.fill()
+  ctx.save(); poly(FLOOR); ctx.clip()
+  for (const [u0, u1, v, sh] of PLANKS) {
+    const l = 80 + sh * 9, c = sh < .5 ? `hsl(36,52%,${l - 6}%)` : `hsl(34,48%,${l - 9}%)`
+    poly([at(u0, v), at(u1, v), at(u1, v + .55), at(u0, v + .55)]); ctx.fillStyle = c; ctx.fill()
+  }
+  ctx.strokeStyle = "rgba(120,80,40,.12)"; ctx.lineWidth = 1
+  for (let v = 0; v <= 50; v += .55) { line([at(0, v), at(94, v)]); ctx.stroke() }                   // the seams
+  const spot = ctx.createRadialGradient(960, 760, 60, 960, 760, 1000); spot.addColorStop(0, "rgba(255,248,230,.16)"); spot.addColorStop(1, "rgba(30,15,0,.3)")
+  ctx.fillStyle = spot; ctx.fillRect(0, FAR - 60, W, NEAR - FAR + 120)
+
+  const BLACK = "#1b1b1d", WHITE = "rgba(255,255,255,.95)"
+  // the lanes, painted black, with their lines in white
+  for (const [bu, dir] of [[0, 1], [94, -1]]) {
+    poly([at(bu, 17), at(bu + dir * 19, 17), at(bu + dir * 19, 33), at(bu, 33)]); ctx.fillStyle = BLACK; ctx.fill()
+    ctx.strokeStyle = WHITE; ctx.lineWidth = 2.5
+    const ft = bu + dir * 19, rimU = bu + dir * 5.25
+    line(arc(ft, 25, 6, dir > 0 ? -Math.PI / 2 : Math.PI / 2, dir > 0 ? Math.PI / 2 : Math.PI * 1.5)); ctx.stroke()   // free-throw circle, outside the lane
+    ctx.setLineDash([9, 8]); line(arc(ft, 25, 6, dir > 0 ? Math.PI / 2 : -Math.PI / 2, dir > 0 ? Math.PI * 1.5 : Math.PI / 2)); ctx.stroke(); ctx.setLineDash([])   // dashed, inside it
+    line([at(bu, 21), at(rimU - dir * 1.25, 21)]); line([at(bu, 29), at(rimU - dir * 1.25, 29)])
+    line([at(rimU - dir * 1.25, 21), ...arc(rimU, 25, 4, dir > 0 ? -Math.PI / 2 : Math.PI * 1.5, dir > 0 ? Math.PI / 2 : Math.PI / 2), at(rimU - dir * 1.25, 29)]); ctx.stroke()   // the restricted area
+    ctx.strokeStyle = "#e0882a"; ctx.lineWidth = 3                                                   // under the rim, in orange
+    line([at(bu + dir * 4, 22), at(bu + dir * 4, 28)]); ctx.stroke()
+    ctx.lineWidth = 2; line(arc(rimU, 25, .75, 0, TAU, 20)); ctx.stroke()
+    ctx.strokeStyle = BLACK; ctx.lineWidth = 2                                                      // hash marks along the lane
+    for (const hu of [7, 8, 11, 14]) for (const [v0, v1] of [[16.2, 17], [33, 33.8]]) { line([at(bu + dir * hu, v0), at(bu + dir * hu, v1)]); ctx.stroke() }
+  }
+  // the court's lines, in black
+  ctx.strokeStyle = BLACK; ctx.lineWidth = 3
+  poly(FLOOR); ctx.stroke()
+  line([at(47, 0), at(47, 50)]); ctx.stroke()
+  for (const [bu, dir] of [[0, 1], [94, -1]]) {
+    const hu = bu + dir * 5.25, ang = Math.asin(22 / 23.75)
+    line([at(bu, 3), at(bu + dir * 14, 3), ...arc(hu, 25, 23.75, dir > 0 ? -ang : Math.PI + ang, dir > 0 ? ang : Math.PI - ang), at(bu + dir * 14, 47), at(bu, 47)]); ctx.stroke()
+    for (const v of [0, 50]) { const v1 = v ? 47 : 3; line([at(bu + dir * 28, v), at(bu + dir * 28, v1)]); ctx.stroke() }   // the coaching-box ticks
+  }
+  // centre court: the DEVSA alt mark, big and laid flat, no circle
+  if (LOGO.complete && LOGO.width) {
+    const [cx, cy] = at(47, 25), k = kAt(25), wft = 17, hft = wft * 551.77 / 735.7
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(1, (NEAR - FAR) / 50 / k)          // the floor's foreshortening
+    ctx.drawImage(LOGO, -wft * k / 2, -hft * k / 2, wft * k, hft * k); ctx.restore()
+  }
+  ctx.restore()
+}
+
+// the scroll along the far side: an LED board in the brand colours, a whole number of passes a loop
+function ledBoard(t) {
+  const [x0] = at(-5, -3.5), [x1] = at(99, -3.5), y = at(0, -3.5)[1] - 30, h = 26
+  ctx.fillStyle = "#08090b"; ctx.fillRect(x0 - 40, y, x1 - x0 + 80, h)
+  ctx.save(); ctx.beginPath(); ctx.rect(x0 - 40, y, x1 - x0 + 80, h); ctx.clip()
+  ctx.font = '700 17px "Geist Mono"'; ctx.textBaseline = "middle"; ctx.textAlign = "left"; ctx.letterSpacing = "3px"
+  const parts = [["DEVSA FM", ORANGE], ["  ·  ", "#666"], ["devsa.community", TEAL], ["  ·  ", "#666"], [">SA_", PINK], ["  ·  ", "#666"]]
+  const unit = parts.reduce((s, [txt]) => s + ctx.measureText(txt).width, 0)
+  let x = x0 - 40 - ((t / T) * 6 * unit) % unit
+  while (x < x1 + 40) { for (const [txt, col] of parts) { ctx.fillStyle = col; ctx.fillText(txt, x, y + h / 2 + 1); x += ctx.measureText(txt).width } }
+  ctx.letterSpacing = "0px"; ctx.restore()
+}
+
+// a hoop: stanchion, arm, backboard edge-on, rim, net (rippling as the ball goes through)
+function hoop(t, dir, swish) {
+  const bu = dir > 0 ? 94 : 0, rimU = bu - dir * 5.25
+  const [fx, fy] = at(bu + dir * 4, 25), k = kAt(25)
+  const [bx, by] = lift(bu - dir * 4, 25, 13.2), [bx2, by2] = lift(bu - dir * 4, 25, 9.8)
+  // stanchion and arm
+  ctx.fillStyle = "#1d1f24"; ctx.fillRect(fx - 26, fy - 70, 52, 70)
+  ctx.strokeStyle = "#2a2d33"; ctx.lineWidth = 12; line([[fx, fy - 66], [fx, by - 10], [bx + dir * 6, by - 10]]); ctx.stroke()
+  // backboard, seen from the side: a thin pane catching the light
+  const bw = .9 * k, bt = by - 26, bb = by2 + 14     // the backboard, turned slightly toward us
+  ctx.fillStyle = "rgba(220,235,245,.28)"; poly([[bx - dir * 3, bt], [bx + dir * bw, bt + 8], [bx + dir * bw, bb + 8], [bx - dir * 3, bb]]); ctx.fill()
+  ctx.strokeStyle = "rgba(255,255,255,.9)"; ctx.lineWidth = 3; ctx.stroke()
+  ctx.strokeStyle = "rgba(255,255,255,.75)"; ctx.lineWidth = 2; poly([[bx + dir * bw * .25, bb - 30], [bx + dir * bw * .75, bb - 28], [bx + dir * bw * .75, bb - 4], [bx + dir * bw * .25, bb - 6]]); ctx.stroke()
+  // rim and net
+  const [rx, ry] = lift(rimU, 25, 10), rw = 1.5 * k
+  const rip = Math.sin(swish * Math.PI) * 8, sway = Math.sin(swish * TAU * 2) * 4 * (1 - swish)
+  ctx.strokeStyle = "rgba(255,255,255,.85)"; ctx.lineWidth = 2
+  for (let i = 0; i <= 6; i++) {
+    const a = i / 6, x = rx - rw / 2 + a * rw
+    line([[x, ry], [lerp(rx - rw * .28, rx + rw * .28, a) + sway, ry + 44 + rip]]); ctx.stroke()
+  }
+  for (const yy of [16, 30]) { line([[rx - rw * .42, ry + yy + rip * yy / 44], [rx + rw * .42, ry + yy + rip * yy / 44]]); ctx.stroke() }
+  ctx.strokeStyle = ORANGE; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(rx, ry, rw / 2, 6, 0, 0, TAU); ctx.stroke()
+}
+
+
+// an agent: a plush monster from plush.js in its team's colours, waddling with strides that match
+// the ground it covers, sliding on defence, arms up for the shot, holding the ball at its belly
+function bot(p, team, m, t) {
+  const { jersey, number, seed } = team, { u, v, h, status } = p
+  const k = kAt(v), [x, y] = at(u, v), s = k / 20 * 1.35
+  const cheer = Math.max(status.includes("✓") ? 1 : 0, p.mouth || 0)
+  const head = drawPlush(ctx, { x, y, s, tint: jersey, number, t, stride: TAU * m.stride, run: Math.min(1, m.speed / 9),
+    lean: h > .3 || p.slide ? 0 : Math.max(-.14, Math.min(.14, m.vu * .012)), airborne: h > .3, liftPx: h * k,
+    armsUp: p.armsUp, armsWide: p.armsWide, hold: p.hold, slide: p.slide, mouth: cheer || (p.armsUp ? .6 : 0),
+    look: status.startsWith("observe") || status.startsWith("critique") ? Math.sin(t * TAU * .8 + seed) * 4 : Math.max(-3, Math.min(3, m.vu * .4)), seed: seed * 10 + 3 })
+  ctx.font = '700 13px "Geist Mono"'
+  const cw = ctx.measureText(status).width + 36
+  return { x: x - cw / 2, y: head.headY - 30, w: cw, ax: x, ay: head.headY, status, jersey, c: t, seed }
+}
+
+// the status chips: pushed up until none overlap, with a hairline down to their bot when moved
+function chips(list) {
+  list.sort((a, b) => b.y - a.y)
+  const placed = []
+  for (const ch of list) {
+    let moved = true
+    while (moved) { moved = false
+      for (const o of placed) if (ch.x < o.x + o.w + 6 && o.x < ch.x + ch.w + 6 && ch.y < o.y + 26 && o.y < ch.y + 26) { ch.y = o.y - 28; moved = true } }
+    placed.push(ch)
+  }
+  for (const { x: cx2, y: cy2, w: cw, ax, ay, status, jersey, c, seed } of placed) {
+    if (ay - (cy2 + 22) > 14) { ctx.strokeStyle = jersey; ctx.globalAlpha = .6; ctx.lineWidth = 1.5; line([[ax, cy2 + 22], [ax, ay - 6]]); ctx.stroke(); ctx.globalAlpha = 1 }
+    chip(cx2, cy2, cw, status, jersey, c, seed)
+  }
+}
+function chip(cx2, cy2, cw, status, jersey, c, seed) {
+  ctx.font = '700 13px "Geist Mono"'; ctx.textAlign = "left"; ctx.textBaseline = "middle"
+  ctx.fillStyle = "rgba(12,14,18,.88)"; ctx.beginPath(); ctx.roundRect(cx2, cy2, cw, 22, 11); ctx.fill()
+  ctx.strokeStyle = jersey; ctx.lineWidth = 1.5; ctx.stroke()
+  const a0 = c * TAU * 1.1 + seed
+  ctx.strokeStyle = jersey; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx2 + 13, cy2 + 11, 5.5, a0, a0 + TAU * .75); ctx.stroke()
+  const ax = cx2 + 13 + Math.cos(a0 + TAU * .75) * 5.5, ay = cy2 + 11 + Math.sin(a0 + TAU * .75) * 5.5
+  ctx.fillStyle = jersey; ctx.beginPath(); ctx.arc(ax, ay, 2, 0, TAU); ctx.fill()            // the arrowhead, chasing its tail
+  ctx.fillStyle = "rgba(235,235,235,.95)"; ctx.fillText(status, cx2 + 25, cy2 + 11.5)
+}
+
+function ball(u, v, h) {
+  const k = kAt(v), [x, y] = at(u, v), r = .78 * k * .8
+  ctx.fillStyle = "rgba(0,0,0,.25)"; ctx.beginPath(); ctx.ellipse(x, y, r * 1.1, r * .35, 0, 0, TAU); ctx.fill()
+  const by = y - h * k
+  ctx.fillStyle = "#e8742a"; ctx.beginPath(); ctx.arc(x, by, r, 0, TAU); ctx.fill()
+  ctx.strokeStyle = "rgba(40,20,10,.7)"; ctx.lineWidth = 1.5
+  ctx.beginPath(); ctx.arc(x, by, r, 0, TAU); ctx.moveTo(x - r, by); ctx.lineTo(x + r, by); ctx.moveTo(x, by - r); ctx.lineTo(x, by + r); ctx.stroke()
+}
+
+
+// the scoreboard over centre court: the score, the game clock, the shot clock; FINAL at the buzzer
+function scoreboard(t, st) {
+  const fac = span(t, TIMEOUT[0] + .5, TIMEOUT[0] + 1.5) * (1 - span(t, TIMEOUT[1] - 1.5, TIMEOUT[1] - .5))
+  if (fac > 0) { factory(t, fac); if (fac >= 1) return }
+  const x = 960, y = 50, w = 460, h = 150, sc2 = scoreAt(t), over = t >= GAME_END
+  ctx.save(); ctx.globalAlpha = 1 - fac
+  ctx.strokeStyle = "#2a2d33"; ctx.lineWidth = 4; line([[x - 140, 0], [x - 140, y]]); ctx.stroke(); line([[x + 140, 0], [x + 140, y]]); ctx.stroke()
+  ctx.fillStyle = "#121418"; ctx.beginPath(); ctx.roundRect(x - w / 2, y, w, h, 10); ctx.fill()
+  const horn = t >= GAME_END && t < GAME_END + 1.6 && Math.floor((t - GAME_END) * 6) % 2 === 0
+  ctx.strokeStyle = horn ? "#ff4a3d" : "rgba(255,255,255,.12)"; ctx.lineWidth = horn ? 5 : 2; ctx.stroke()
+  ctx.textAlign = "center"; ctx.textBaseline = "middle"
+  ctx.font = '700 14px "Geist Mono"'; ctx.letterSpacing = "3px"; ctx.fillStyle = "rgba(255,255,255,.7)"; ctx.fillText("DEVSA FM", x, y + 20); ctx.letterSpacing = "0px"
+  ;[[x - 150, TEAL, TEAM[0].name, sc2[0]], [x + 150, PINK, TEAM[1].name, sc2[1]]].forEach(([cx, col, nm, n]) => {
+    ctx.font = '700 14px "Geist Mono"'; ctx.letterSpacing = "3px"; ctx.fillStyle = col; ctx.fillText(nm, cx, y + 48); ctx.letterSpacing = "0px"
+    ctx.font = '700 54px "Geist Mono"'; ctx.fillStyle = "#f2f2f2"; ctx.fillText(String(n).padStart(2, "0"), cx, y + 96)
+  })
+  const gc = gameClock(t), m = Math.floor(gc / 60), sec = Math.floor(gc % 60), tenths = Math.floor(gc * 10) % 10
+  ctx.font = '700 40px "Geist Mono"'; ctx.fillStyle = over ? "#ff5a4a" : gc < 10 ? "#ff5a4a" : "#ffb43a"
+  ctx.fillText(over ? "FINAL" : st.intro ? "--:--" : gc < 10 ? `${sec}.${tenths}` : `${m}:${String(sec).padStart(2, "0")}`, x, y + 78)
+  if (!over && !st.intro && !st.timeout) { ctx.font = '700 16px "Geist Mono"'; ctx.fillStyle = "rgba(255,255,255,.55)"; ctx.fillText(`shot ${String(Math.ceil(st.clock)).padStart(2, "0")}`, x, y + 112) }
+  ;[TEAL, PINK, ORANGE].forEach((col, i) => { ctx.fillStyle = col; ctx.fillRect(x - 54 + i * 38, y + h - 12, 32, 4) })
+  ctx.restore()
+}
+
+// the timeout's board: a factory line, tickets moving plan -> build -> test -> ship, counting what shipped
+function factory(t, a) {
+  const x0 = 470, y0 = 40, w = 980, h = 190, tt = t - TIMEOUT[0]
+  ctx.save(); ctx.globalAlpha = a
+  ctx.strokeStyle = "#2a2d33"; ctx.lineWidth = 4; line([[x0 + 200, 0], [x0 + 200, y0]]); ctx.stroke(); line([[x0 + w - 200, 0], [x0 + w - 200, y0]]); ctx.stroke()
+  ctx.fillStyle = "#121418"; ctx.beginPath(); ctx.roundRect(x0, y0, w, h, 12); ctx.fill(); ctx.strokeStyle = "rgba(255,255,255,.14)"; ctx.lineWidth = 2; ctx.stroke()
+  ctx.textAlign = "left"; ctx.textBaseline = "middle"
+  ctx.font = '700 15px "Geist Mono"'; ctx.letterSpacing = "4px"; ctx.fillStyle = "#ffb43a"; ctx.fillText("TIMEOUT", x0 + 24, y0 + 26)
+  ctx.fillStyle = "rgba(255,255,255,.6)"; ctx.fillText("· THE FACTORY FLOOR", x0 + 150, y0 + 26); ctx.letterSpacing = "0px"
+  const stations = ["PLAN", "BUILD", "TEST", "SHIP"], sx = k => x0 + 60 + k * 230, beltY = y0 + 120
+  ctx.fillStyle = "#1e2228"; ctx.fillRect(x0 + 30, beltY + 22, w - 60, 10)                       // the belt
+  for (let k = 0; k < 40; k++) { const bx = x0 + 30 + ((k * 24 + tt * 60) % (w - 60)); ctx.fillStyle = "#2c323a"; ctx.fillRect(bx, beltY + 22, 3, 10) }
+  stations.forEach((nm, k) => {
+    ctx.fillStyle = "#1a1e24"; ctx.beginPath(); ctx.roundRect(sx(k) - 10, y0 + 46, 190, 40, 8); ctx.fill()
+    ctx.strokeStyle = [TEAL, PINK, ORANGE, "#5be3a0"][k]; ctx.lineWidth = 2; ctx.stroke()
+    ctx.font = '700 16px "Geist Mono"'; ctx.letterSpacing = "3px"; ctx.fillStyle = [TEAL, PINK, ORANGE, "#5be3a0"][k]; ctx.textAlign = "center"; ctx.fillText(nm, sx(k) + 85, y0 + 67); ctx.letterSpacing = "0px"
+    if (k < 3) { ctx.fillStyle = "rgba(255,255,255,.35)"; ctx.fillText("→", sx(k) + 205, y0 + 67) }
+  })
+  // tickets: one every 1.4 s, 9 s down the line; colour by the station it's under
+  let shipped = 0
+  for (let n = 0; n < 24; n++) {
+    const born = n * 1.4 - 6, u = (tt - born) / 9
+    if (u >= 1) { shipped++; continue } if (u < 0) continue
+    const tx = x0 + 40 + u * (w - 120), k = Math.min(3, Math.floor(u * 4)), col = [TEAL, PINK, ORANGE, "#5be3a0"][k]
+    ctx.fillStyle = "#f4ead6"; ctx.beginPath(); ctx.roundRect(tx, beltY - 6, 54, 28, 4); ctx.fill()
+    ctx.fillStyle = col; ctx.fillRect(tx, beltY - 6, 6, 28)
+    ctx.font = '700 12px "Geist Mono"'; ctx.textAlign = "left"; ctx.fillStyle = "#1b1b1e"; ctx.fillText(`#${101 + n}`, tx + 11, beltY + 8)
+  }
+  ctx.font = '700 15px "Geist Mono"'; ctx.textAlign = "right"; ctx.letterSpacing = "3px"; ctx.fillStyle = "#5be3a0"
+  ctx.fillText(`SHIPPED ${String(shipped).padStart(2, "0")}`, x0 + w - 24, y0 + 26); ctx.letterSpacing = "0px"
+  ctx.restore()
+}
+
+// the penguin, courtside on the far side: hops for every basket, dances through the timeout,
+// flippers up at the buzzer
+const PENGUIN = new Image(); PENGUIN.src = "penguin.png"
+function courtside(t, st) {
+  if (!PENGUIN.complete || !PENGUIN.width) return
+  const [x, y] = at(30, -2.4), h = 88, w = h * PENGUIN.width / PENGUIN.height
+  const big = t > GAME_END, beat = (t * BPM / 60) % 1
+  const hop = big ? Math.abs(Math.sin(TAU * 1.4 * t)) * 26 : st.cheer > .05 ? Math.abs(Math.sin(TAU * 1.6 * t)) * 16 * st.cheer : (0.5 - 0.5 * Math.cos(beat * TAU)) * 2
+  const rot = st.timeout ? Math.sin(TAU * (t * BPM / 60) / 2) * .16 : big ? Math.sin(TAU * 2.6 * t) * .1 : 0
+  ctx.save(); ctx.translate(x, y - hop); ctx.rotate(rot)
+  ctx.imageSmoothingEnabled = false; ctx.drawImage(PENGUIN, -w / 2, -h, w, h); ctx.imageSmoothingEnabled = true
+  if (big || st.cheer > .5) { ctx.fillStyle = "#151515"; for (const d of [-1, 1]) { ctx.save(); ctx.translate(d * w * .36, -h * .5); ctx.rotate(d * (-.9 + Math.sin(TAU * 2.6 * t) * .25)); ctx.fillRect(-4, -26, 8, 26); ctx.restore() } }
+  ctx.restore()
+}
+
+// signs in the stands, held up for baskets, blocks and the buzzer
+const SIGNS = [[230, 330, "LGTM"], [610, 268, "SHIP IT"], [1330, 300, ">_"], [1700, 256, "LGTM"], [960, 360, "SHIP IT"]]
+function signs(t, st) {
+  const up = Math.max(st.cheer, t > GAME_END ? 1 : 0); if (up < .05) return
+  SIGNS.forEach(([x, y, txt], i) => {
+    const a = Math.min(1, up * 1.6 - hash(i, 3) * .3); if (a <= 0) return
+    const yy = y + (1 - a) * 24 + Math.sin(TAU * 2 * t + i) * 3
+    ctx.save(); ctx.globalAlpha = a
+    ctx.font = '700 20px "Geist Mono"'; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+    const wd = ctx.measureText(txt).width + 26
+    ctx.fillStyle = "#3a3330"; ctx.fillRect(x - 2, yy + 14, 4, 30)                                         // the stick
+    ctx.fillStyle = "#f4ead6"; ctx.beginPath(); ctx.roundRect(x - wd / 2, yy - 16, wd, 32, 3); ctx.fill()
+    ctx.fillStyle = txt === ">_" ? PINK : "#1b1b1e"; ctx.fillText(txt, x, yy + 1)
+    ctx.restore()
+  })
+}
+
+// a thought bubble beside the agent who's thinking
+function thought(t, st) {
+  const th = thoughtAt(t); if (!th || th.a <= 0) return
+  const b = st.bots[th.b]; if (!b || b.hidden) return
+  const k = kAt(b.v), [x, y] = at(b.u, b.v), headY = y - (b.h || 0) * k - 150 * k / 20 * 1.35
+  const right = x < 1500, col = TEAM[th.b].jersey
+  ctx.save(); ctx.globalAlpha = th.a
+  ctx.font = 'italic 700 15px "Geist Mono"'; ctx.textAlign = "left"; ctx.textBaseline = "middle"
+  const tw = ctx.measureText(th.text).width, bw = tw + 34, bh = 38
+  const bx = right ? x + 46 : x - 46 - bw, by = headY - 46
+  ctx.fillStyle = "rgba(246,240,228,.96)"
+  for (const [dx, r] of [[16, 4], [30, 6]]) { ctx.beginPath(); ctx.arc(right ? x + dx : x - dx, headY - 4 - dx * .4, r, 0, TAU); ctx.fill() }
+  ctx.beginPath(); ctx.roundRect(bx, by - bh / 2, bw, bh, 19); ctx.fill()
+  ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.stroke()
+  ctx.fillStyle = "#1b1b1e"; ctx.fillText(th.text, bx + 17, by + 1)
+  ctx.restore()
+}
+
+// confetti after the buzzer, in the brand colours, over the whole floor
+function confetti(t) {
+  if (t < GAME_END) return
+  const age = t - GAME_END
+  for (let k = 0; k < 140; k++) {
+    const a = (age * .45 + hash(k, 1)) % 1, x = 200 + hash(k, 2) * 1520 + Math.sin(a * 8 + k) * 18, y = -20 + a * 1000
+    ctx.fillStyle = [TEAL, PINK, ORANGE, "#f4ead6"][k % 4]; ctx.save(); ctx.translate(x, y); ctx.rotate(a * 9 + k); ctx.fillRect(-5, -2.5, 10, 5); ctx.restore()
+  }
+}
+
+// the introductions: the arena dark, spotlights sweeping, then one on each bot as it runs out, with its card
+const veil = document.createElement("canvas"); veil.width = W; veil.height = H; const vg = veil.getContext("2d")
+function introLights(t, st) {
+  const dark = t < 12 ? 1 : 1 - span(t, 12, 13.6); if (dark <= 0) return
+  vg.globalCompositeOperation = "source-over"; vg.clearRect(0, 0, W, H)
+  vg.fillStyle = `rgba(0,0,0,${(.8 * dark).toFixed(3)})`; vg.fillRect(0, 0, W, H)
+  vg.globalCompositeOperation = "destination-out"
+  const pool = (x, y, rx, ry, a) => { vg.save(); vg.translate(x, y); vg.scale(1, ry / rx); const gr = vg.createRadialGradient(0, 0, 0, 0, 0, rx); gr.addColorStop(0, `rgba(0,0,0,${a})`); gr.addColorStop(.7, `rgba(0,0,0,${a * .8})`); gr.addColorStop(1, "rgba(0,0,0,0)"); vg.fillStyle = gr; vg.beginPath(); vg.arc(0, 0, rx, 0, TAU); vg.fill(); vg.restore() }
+  // two sweeping beams across the floor and the stands
+  const sweeps = [[Math.sin(TAU * t / 6) * 600 + 960, 760], [Math.sin(TAU * t / 6 + 2.4) * 640 + 960, 700]]
+  if (st.feature < 0) for (const [sx, sy] of sweeps) pool(sx, sy, 170, 60, .9)
+  if (st.feature >= 0) { const b = st.bots[st.feature], [bx, by] = at(b.u, b.v); pool(bx, by, 150, 52, 1); pool(bx, by - 90, 90, 130, .85) }
+  ctx.drawImage(veil, 0, 0)
+  // the beams themselves, in colour, from the rafters
+  ctx.save(); ctx.globalCompositeOperation = "lighter"
+  const cone = (x0, x1, y1, col, a) => { const gr = ctx.createLinearGradient(0, 40, 0, y1); gr.addColorStop(0, col + "00"); gr.addColorStop(1, col + Math.round(a * 255).toString(16).padStart(2, "0"))
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.moveTo(x0 - 10, 40); ctx.lineTo(x0 + 10, 40); ctx.lineTo(x1 + 120, y1); ctx.lineTo(x1 - 120, y1); ctx.closePath(); ctx.fill() }
+  if (st.feature < 0) { cone(700, sweeps[0][0], 760, TEAL, .22 * dark); cone(1220, sweeps[1][0], 700, PINK, .22 * dark) }
+  else { const b = st.bots[st.feature], [bx, by] = at(b.u, b.v); cone(bx, bx, by, TEAM[st.feature].jersey, .3 * dark); cone(bx, bx, by, "#ffffff", .1 * dark) }
+  ctx.restore()
+  // the card
+  if (st.feature >= 0) {
+    const tm = TEAM[st.feature], t0 = st.feature === 0 ? 2 : 7, a = Math.min(1, span(t, t0 + .3, t0 + 1)) * (1 - span(t, t0 + 4.4, t0 + 5))
+    ctx.save(); ctx.globalAlpha = a; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+    ctx.font = '700 16px "Geist Mono"'; ctx.letterSpacing = "6px"; ctx.fillStyle = "rgba(255,255,255,.75)"; ctx.fillText("NOW INTRODUCING", 960, 300)
+    ctx.font = '700 72px "Geist Mono"'; ctx.letterSpacing = "4px"; ctx.fillStyle = tm.jersey; ctx.fillText(`#${tm.number}  ${tm.name}`, 960, 362)
+    ctx.font = '700 18px "Geist Mono"'; ctx.letterSpacing = "2px"; ctx.fillStyle = "rgba(255,255,255,.85)"; ctx.fillText(`pattern: ${tm.pattern} · ${tm.loop}`, 960, 418)
+    ctx.letterSpacing = "0px"; ctx.restore()
+  }
+}
+
+function render(t) {
+  t = ((t % T) + T) % T
+  const st = stateAt(t)
+  paint(t, st)
+  const d = g.getImageData(0, 0, COLS, ROWS).data
+  ctx.fillStyle = "#0c0c0c"; ctx.fillRect(0, 0, W, H)
+  ctx.font = `700 ${CELL + 1}px "Geist Mono"`; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    const v = d[(y * COLS + x) * 4] / 255
+    const ch = RAMP[Math.min(RAMP.length - 1, Math.floor(v * RAMP.length))]
+    if (ch === " ") continue
+    ctx.fillStyle = `rgba(235,235,235,${(.25 + v * .75).toFixed(2)})`
+    ctx.fillText(ch, x * CELL + CELL / 2, y * CELL + CELL / 2 + 1)
+  }
+  scoreboard(t, st)
+  signs(t, st)
+  court(t)
+  ledBoard(t)
+  courtside(t, st)
+  hoop(t, -1, st.dir < 0 ? st.swish : 0)
+  const order = [0, 1].filter(b => !st.bots[b].hidden).sort((a, b) => st.bots[a].v - st.bots[b].v)
+  const list = order.map(b => bot(st.bots[b], TEAM[b], motion(b, t), t))
+  hoop(t, 1, st.dir > 0 ? st.swish : 0)
+  if (st.ball) ball(st.ball.u, st.ball.v, st.ball.h)
+  introLights(t, st)
+  chips(list)
+  thought(t, st)
+  confetti(t)
+
+  const cr = window.CREDITS && window.CREDITS.length ? window.CREDITS : ['"Tejano Lofi" by Patrick · made with Suno']
+  const line2 = cr[Math.floor(t / 15) % cr.length]
+  ctx.textAlign = "right"; ctx.textBaseline = "alphabetic"
+  ctx.font = '500 20px "Geist"'; ctx.fillStyle = "rgba(255,255,255,0.75)"
+  ctx.fillText("♪  " + line2, W - 60, H - 52)
+  ctx.textAlign = "left"; ctx.font = '700 22px "Geist Mono"'; ctx.fillStyle = "rgba(255,255,255,0.8)"
+  ctx.letterSpacing = "3px"; ctx.fillText("DEVSA FM  ·  devsa.community", 60, H - 52); ctx.letterSpacing = "0px"
+  const tw = 46
+  ;[TEAL, PINK, ORANGE].forEach((col, i) => { ctx.fillStyle = col; ctx.fillRect(60 + i * (tw + 6), H - 40, tw, 6) })
+}
+
+buildTracks()
+window.render = render
+window.ready = Promise.all([document.fonts.load('700 20px "Geist Mono"'), document.fonts.load('500 20px "Geist"'),
+  ...[LOGO, PENGUIN].map(i => i.complete ? 0 : new Promise(r => { i.onload = r; i.onerror = r }))])
+window.ready.then(() => {
+  if (new URLSearchParams(location.search).has("still")) return render(8)
+  const t0 = performance.now()
+  ;(function loop() { render((performance.now() - t0) / 1000); requestAnimationFrame(loop) })()
+})
+</script>
+</body>
+</html>

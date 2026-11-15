@@ -1,0 +1,22 @@
+# secrets: the stream key. Only config.env.example is tracked.
+config.env
+
+# built output: rendered loops, segments, clips (gigabytes; rebuilt by render.cjs and tools/clip.cjs)
+out/
+social/clips/
+node_modules/
+.DS_Store
+
+# music: the tracks stay local; credits.txt is tracked
+music/*.mp3
+music-tejano/*.mp3
+music*/*.wav
+music*/*.m4a
+
+# other organizations' marks and the City of San Antonio's icons: used on stream, not republished.
+# Copy them in locally (see README).
+scene/icons/*.svg
+scene/proj/groups/
+scene/proj/partners/
+scene/proj/models/
+social/video/*.mp4

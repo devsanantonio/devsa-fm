@@ -1,0 +1,502 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: "Geist Mono"; font-weight: 700; src: url(fonts/GeistMono-Bold.woff2) format("woff2"); }
+  @font-face { font-family: "Geist"; font-weight: 500; src: url(fonts/Geist-Medium.woff2) format("woff2"); }
+  html, body { margin: 0; background: #000; overflow: hidden }
+  canvas { display: block }
+</style>
+</head>
+<body>
+<!--
+  DEVSA FM, the River Walk: a night on the San Antonio River drawn in ASCII (the scene is painted
+  in greys at low resolution, then every cell becomes a character by brightness), and a
+  pixel terminal buddy in headphones nodding to the beat. "Now playing" top right.
+  1920x1080, a seamless T-second loop; render(t) draws a frame.
+-->
+<canvas id="c" width="1920" height="1080"></canvas>
+<script src="plush.js"></script>
+<script>
+// synced (render.cjs SYNC=...): the loop is the song, with the song inside it, and BEATS carries
+// its beat grid, so the riders nod and the lights on the water pulse on the real beat. The
+// scenery's own motions run on a ~60 s cycle, a whole number of them per loop (LT).
+const B = window.BEATS || null
+const T = window.LOOP_T || 60, W = 1920, H = 1080, TAU = Math.PI * 2
+const LT = T / Math.max(1, Math.round(T / 60))
+const TEAL = "#00b2a9", PINK = "#ef426f", ORANGE = "#ff8200"
+const BPM = B ? B.bpm : 76, OFFSET = B ? B.offset : 0
+const beatPh = t => { const bc = (t - OFFSET) * BPM / 60; return bc - Math.floor(bc) }
+const pulseAt = t => Math.exp(-beatPh(t) * 3.5)
+const hash = (a, b) => { const s = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return s - Math.floor(s) }
+const lerp = (a, b, p) => a + (b - a) * p
+const ctx = document.getElementById("c").getContext("2d")
+const CELL = 12, COLS = W / CELL, ROWS = H / CELL      // 160 x 90 characters
+const RAMP = " .,:;-=+*#%@"
+
+// the scene, painted in greys at character resolution
+const sc = document.createElement("canvas"); sc.width = COLS; sc.height = ROWS
+const g = sc.getContext("2d", { willReadFrequently: true })
+const gray = v => { const c = Math.round(v * 255); return `rgb(${c},${c},${c})` }
+function box(x, y, w, h, v) { g.fillStyle = gray(v); g.fillRect(x, y, w, h) }
+function frame(x, y, w, h, v) { g.strokeStyle = gray(v); g.lineWidth = 1; g.strokeRect(x + .5, y + .5, w - 1, h - 1) }
+
+function load_mark() { return new Promise(r => { const i = new Image(); i.onload = () => { sampleMark(i); r() }; i.onerror = r; i.src = (new URLSearchParams(location.search).get("char") === "alt" ? "devsa-alt-logo.svg" : "devsa-logo.svg") }) }
+
+// the City of San Antonio's line icons, recoloured white and drawn into the scene
+const ICON_FILES = ["tower", "alamo", "downtown"]
+const ICON = {}
+async function loadIcons() {
+  for (const n of ICON_FILES) {
+    let svg = await (await fetch("icons/" + n + ".svg")).text()
+    const vb = svg.match(/viewBox="([^"]+)"/)[1].split(/\s+/).map(Number)
+    svg = svg.replace(/#231f20/gi, "#ffffff")
+    ICON[n] = { vb, svg }
+  }
+}
+// draw an icon `w` cells wide at grey level v; strokes sized to read at character resolution
+const ICON_IMG = {}
+function icon(n, x, y, w, v) {
+  const key = n + "@" + w
+  let im = ICON_IMG[key]
+  if (!im) {
+    const { vb, svg } = ICON[n], sw = (vb[2] / w) * 1.1
+    const s2 = svg.replace(/stroke-width:\s*[^;]+;/g, "").replace(/stroke:\s*#ffffff;/g, `stroke: #ffffff; stroke-width: ${sw}px;`)
+    im = new Image(); im.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(s2); ICON_IMG[key] = im
+    return
+  }
+  if (!im.complete) return
+  const h = w * ICON[n].vb[3] / ICON[n].vb[2]
+  g.save(); g.globalAlpha = v; g.drawImage(im, x, y, w, h); g.restore()
+}
+
+function onGround(n, x, base, w, v) { if (!ICON[n]) return; icon(n, x, base - w * ICON[n].vb[3] / ICON[n].vb[2], w, v) }
+
+// the landmarks mirrored about the bank, faded, each row of the water shifted by its ripple
+const rc = document.createElement("canvas"); rc.width = COLS; rc.height = ROWS
+const rg = rc.getContext("2d")
+function reflect(t) {
+  rg.clearRect(0, 0, COLS, ROWS)
+  rg.save(); rg.translate(0, 2 * 48); rg.scale(1, -1)
+  const draw = (n, x, base, w) => { if (!ICON[n]) return; const im = ICON_IMG[n + "@" + w]; if (!im || !im.complete) return
+    const h = w * ICON[n].vb[3] / ICON[n].vb[2]; rg.drawImage(im, x, base - h, w, h) }
+  draw("tower", 72, 44, 22); draw("alamo", 6, 44, 24); draw("downtown", 128, 44, 14)
+  rg.restore()
+  g.save(); g.globalCompositeOperation = "lighten"; g.globalAlpha = .32
+  for (let y = 52; y < ROWS; y++) {
+    const dx = Math.round(Math.sin(TAU * 2 * t / LT + y * .9) * (1 + (y - 52) * .06))
+    g.globalAlpha = .34 * (1 - (y - 52) / 40)
+    g.drawImage(rc, 0, y, COLS, 1, dx, y, COLS, 1)
+  }
+  g.restore()
+}
+
+function paint(t) {
+  // night sky: stars, and a crescent moon over the skyline
+  box(0, 0, COLS, ROWS, .05)
+  for (let i = 0; i < 80; i++) {
+    const x = Math.floor(hash(i, 1) * COLS), y = Math.floor(hash(i, 2) * 26), k = 1 + Math.floor(hash(i, 3) * 4)
+    box(x, y, 1, 1, .26 + .3 * hash(i, 4) + .16 * Math.sin(TAU * k * t / LT + i))
+  }
+  g.fillStyle = gray(.95); g.beginPath(); g.arc(150, 8, 3.6, 0, TAU); g.fill()
+  g.fillStyle = gray(.05); g.beginPath(); g.arc(151.6, 7, 3.4, 0, TAU); g.fill()
+
+  // the landmarks, standing on the riverbank
+
+  // cypress trees along the bank, between the landmarks: dark, so the landmarks lead
+  const cypress = (x, h, w, seed) => {
+    const base = 44, top = base - h
+    box(x, top + h * .45, 1, h * .55, .22)                              // trunk
+    let s = seed; const r = () => (s = (s * 16807) % 2147483647) / 2147483647
+    for (let i = 0; i < 46; i++) {                                    // a crown of soft clumps
+      const v = r(), yy = top + 2 + v * h * .62, spread = w * (.45 + .55 * Math.sin(Math.PI * Math.min(1, v * 1.15)))
+      const xx = x + (r() - .5) * 2 * spread
+      g.fillStyle = gray(.22 + .14 * r()); g.beginPath(); g.ellipse(xx, yy, 2.4 + r() * 1.8, 1.8 + r() * 1.4, 0, 0, TAU); g.fill()
+    }
+    for (let k = 0; k < 5; k++) box(x - w * .6 + k * w * .3, top + h * .5, 1, 3 + (k % 3), .2)   // a little hanging moss
+  }
+  for (const [x, h, w, sd] of [[38, 26, 7, 3], [50, 20, 6, 7], [62, 24, 6, 11], [100, 22, 6, 13], [112, 28, 8, 17], [140, 21, 6, 19]]) cypress(x, h, w, sd)
+
+  // the landmarks, in front of the trees
+  onGround("tower", 72, 44, 22, .95)
+  box(83, 44 - 22 * 38.05 / 21.39 - 1, 1, 1, .3 + .7 * (.5 + .5 * Math.sin(TAU * 15 * t / LT)))   // the beacon
+  onGround("alamo", 6, 44, 24, .95)                                   // the Alamo's facade, far left
+  onGround("downtown", 128, 44, 14, .95)                             // the Torch of Friendship, downtown
+
+  // the riverbank, a lit edge on top; the walk on each side
+  box(0, 44, COLS, 6, .17); box(0, 44, COLS, 1, .3)
+  box(0, 48, 62, 3, .42); box(102, 48, 58, 3, .42)
+
+  // people out walking: little ASCII figures along the walk, some each way (hidden by the bridge in the middle)
+  for (let i = 0; i < 6; i++) {
+    const dir = i % 2 ? -1 : 1, sp = 1 + (i % 3), x0 = hash(i, 9) * COLS
+    const x = Math.round(((x0 + dir * sp * (t / LT) * (COLS + 20)) % (COLS + 20) + COLS + 20) % (COLS + 20) - 10)
+    const step = Math.floor(t * 3 + i) % 2
+    box(x, 45, 1, 1, .7); box(x, 46, 1, 2, .5); box(x + (step ? 1 : -1) * (dir > 0 ? 1 : 0), 48, 1, 1, .4)
+  }
+
+  // a stone footbridge arching across
+  g.fillStyle = gray(.36); g.beginPath(); g.moveTo(52, 40); g.lineTo(108, 40); g.lineTo(108, 52); g.quadraticCurveTo(80, 33, 52, 52); g.closePath(); g.fill()
+  box(52, 38, 56, 2, .5)
+  for (let x = 54; x < 108; x += 4) box(x, 36, 1, 2, .45)                       // railing
+  for (let x = 56; x < 106; x += 6) box(x, 41, 3, 1, .26)                       // stones
+
+  // the river: dark water, ripples drifting past, lights reflected and shimmering
+  box(0, 51, COLS, ROWS - 51, .1)
+  // the landmarks upside down in the water, broken into strips by the ripples
+  reflect(t)
+  for (let r = 0; r < 10; r++) { const y = 53 + r * 3.6, speed = 4 + r % 3
+    for (let k = 0; k < 7; k++) { const x = ((k * 29 + r * 13 - (t / LT) * speed * COLS) % COLS + COLS) % COLS
+      box(x, y, 6 + (k % 3) * 3, 1, .22 + (r % 2) * .06) } }
+  for (const lx of [4, 14, 26, 44, 60, 104, 118, 132, 150]) for (let k = 0; k < 4; k++) {
+    const y = 53 + k * 5, on = Math.sin(TAU * 6 * t / LT + lx + k) > -.2
+    if (on) box(lx + Math.round(Math.sin(TAU * 3 * t / LT + k) * 1), y, 2, 1, .4 - k * .07 + .3 * pulseAt(t)) }
+}
+
+// the character: the DEVSA mark itself, sampled from devsa-logo.svg onto a pixel grid
+// (so its shape is the logo's own), with headphones and feet added around it. The
+// cursor bar blinks like a terminal. The window is drawn dark grey instead of black so
+// it reads against the dark room.
+const GW = 44, GH = 33                                  // the logo is 735.7 x 551.8: 4:3
+let MARK = null
+const PIXEL_MARK = [
+  ".tttttt.pppppppp.oooooo.",
+  "ttttttt.pppppppp.ooooooo",
+  "LLLLLLLLLLLLLLLLLLLLLLLL",
+  "LkkkkkkkkkkkkkkkkkkkkkkL",
+  "LkkwwwkkkkkkwwwwkkkwkkkL",
+  "LkkkwwwkkkkwkkkkkkwkwkkL",
+  "LkkkkwwwkkkwkkkkkwkkkwkL",
+  "LkkkkkwwwkkkwwwkkwkkkwkL",
+  "LkkkkkkwwwkkkkkwkwwwwwkL",
+  "LkkkkkwwwkkkkkkwkwkkkwkL",
+  "LkkkkwwwkkkwwwwkkwkkkwkL",
+  "LkkkwwwkkkkkkkkkkkkkkkkL",
+  "LkkwwwkkkkkwwwwwwwwwwwkL",
+  "LkkkkkkkkkkwwwwwwwwwwwkL",
+  "LkkkkkkkkkkkkkkkkkkkkkkL",
+  "LkkkkkkkkkkkkkkkkkkkkkkL",
+  ".LkkkkkkkkkkkkkkkkkkkkL.",
+  "..LLLLLLLLLLLLLLLLLLLL..",
+]                                         // GH rows of GW cells: palette keys
+const MPAL = { L: "#eeeeee", k: "#1c1c1c", w: "#eeeeee", t: TEAL, p: PINK, o: ORANGE }
+function sampleMark(img) {
+  const c = document.createElement("canvas"); c.width = GW * 8; c.height = GH * 8
+  const x = c.getContext("2d", { willReadFrequently: true }); x.drawImage(img, 0, 0, c.width, c.height)
+  const d = x.getImageData(0, 0, c.width, c.height).data
+  const ref = { k: [0, 0, 0], w: [238, 238, 238], t: [0, 178, 169], p: [239, 66, 111], o: [255, 130, 0] }
+  MARK = []
+  for (let r = 0; r < GH; r++) { let row = ""
+    for (let q = 0; q < GW; q++) {
+      // the cell's centre pixel decides it
+      const i = ((r * 8 + 4) * c.width + q * 8 + 4) * 4
+      if (d[i + 3] < 128) { row += "."; continue }
+      let best = ".", bd = 1e9
+      // only the tab row may be coloured; below it a cell is the window or a glyph
+      const keys = r < GH * 0.18 ? Object.keys(ref) : ["k", "w"]
+      for (const kk of keys) { const [R, G, B] = ref[kk]; const dd = (d[i] - R) ** 2 + (d[i + 1] - G) ** 2 + (d[i + 2] - B) ** 2; if (dd < bd) { bd = dd; best = kk } }
+      row += best }
+    MARK.push(row) }
+}
+// which mark cells are the cursor bar (they blink): the light cells in the bottom third, right half
+const isCursor = (r, q) => r >= GH * 0.7 && q >= GW * 0.45
+function buddy(t) {
+  return buddyPixel(t)
+  if (!MARK) return
+  const beat = beatPh(t)
+  const bob = Math.round(Math.pow(Math.sin(beat * Math.PI), 2) * 10)
+  const cursorOn = Math.floor(t * 2) % 2 === 0
+  const px = 7, mw = GW * px, mh = GH * px
+  const bx = Math.round(W / 2 - mw / 2 - 96), by = 1004 - 5 * px - mh       // feet below
+  const y0 = by + bob
+  // headphones: a band over the top, cups against the sides
+  ctx.fillStyle = "#d9d9d9"
+  const k = GW / 32, band = [[6, 26, -5], [4, 6, -4], [26, 28, -4], [3, 4, -3], [28, 29, -3], [2, 3, -2], [29, 30, -2]].map(([a, b, y]) => [Math.round(a * k), Math.round(b * k), Math.round(y * k)])
+  for (const [a0, a1, ry] of band) ctx.fillRect(bx + a0 * px, y0 + ry * px, (a1 - a0) * px, px)
+  ctx.fillRect(bx - 3 * px, y0 - 1 * px, 4 * px, 13 * px); ctx.fillRect(bx + mw - px, y0 - 1 * px, 4 * px, 13 * px)
+  ctx.fillRect(bx - 2 * px, y0 - 3 * px, 2 * px, 2 * px); ctx.fillRect(bx + mw, y0 - 3 * px, 2 * px, 2 * px)
+  // the mark
+  MARK.forEach((row, r) => [...row].forEach((ch, q) => {
+    if (ch === ".") return
+    if (ch === "w" && isCursor(r, q) && !cursorOn) { ctx.fillStyle = MPAL.k } else ctx.fillStyle = MPAL[ch]
+    ctx.fillRect(bx + q * px, y0 + r * px, px, px)
+  }))
+  // feet, on the floor
+  ctx.fillStyle = "#1c1c1c"
+  for (const fx of [9, 30]) { ctx.fillRect(bx + fx * px, y0 + mh, 5 * px, by + mh + 3 * px - (y0 + mh)); ctx.fillRect(bx + (fx - 1) * px, by + mh + 3 * px, 7 * px, 2 * px) }
+}
+
+function buddyPixel(t) {
+  const beat = beatPh(t)
+  const bob = Math.round(Math.pow(Math.sin(beat * Math.PI), 2) * 10)
+  const cursorOn = Math.floor(t * 2) % 2 === 0
+  const C = window.CHAR || {}
+  const px = C.px || 13, cols = PIXEL_MARK[0].length, rows = PIXEL_MARK.length, mw = cols * px, mh = rows * px
+  const sway = C.sway ? C.sway(t) : 0
+  const bx = Math.round(C.x != null ? C.x - mw / 2 : W / 2 - mw / 2 - 96), by = (C.y != null ? C.y : 1004 - 4 * px) - mh + sway, y0 = by + bob
+  ctx.fillStyle = "#d9d9d9"
+  for (const [a0, a1, ry] of [[5, 19, -4], [3, 5, -3], [19, 21, -3], [1, 3, -2], [21, 23, -2], [0, 1, -1], [23, 24, -1]]) ctx.fillRect(bx + a0 * px, y0 + ry * px, (a1 - a0) * px, px)
+  ctx.fillRect(bx - 2 * px, y0, 2 * px, 9 * px); ctx.fillRect(bx + mw, y0, 2 * px, 9 * px)
+  PIXEL_MARK.forEach((row, r) => [...row].forEach((ch, q) => {
+    if (ch === ".") return
+    const cur = ch === "w" && (r === 12 || r === 13) && q >= 11
+    ctx.fillStyle = cur && !cursorOn ? MPAL.k : MPAL[ch]
+    ctx.fillRect(bx + q * px, y0 + r * px, px, px)
+  }))
+  if (C.noFeet) return
+  ctx.fillStyle = "#eeeeee"
+  for (const fx of [5, 16]) { ctx.fillRect(bx + fx * px, y0 + mh, 3 * px, by + mh + 3 * px - (y0 + mh)); ctx.fillRect(bx + (fx - 1) * px, by + mh + 3 * px, 5 * px, px) }
+}
+
+// the barge, after GO RIO's river boats: a long open boat with rounded ends, a dark hull,
+// and tall side panels of cut metal (papel picado sunbursts) in a bright colour. The
+// character rides inside, peeking over the panels.
+const ROCK = t => Math.sin(TAU * 4 * t / LT) * 2.5              // 4 slow rocks a loop
+window.CHAR = { x: 770, y: 830, px: 11, sway: ROCK, noFeet: true }
+const BOAT = { panel: "#2c8fa3", panelDark: "#1d6474", cut: "#0b1f24", rim: "#c58a4a", hull: "#1a1d20", hullLine: "#3a3f45" }
+// the alt logo turned into a cut: its black window and tabs become openings (cut colour),
+// its light chevron, SA and cursor stay as metal (panel colour). Built once.
+let CUT = null
+function cutMark() {
+  if (CUT || !ALT.complete) return CUT
+  const c = document.createElement("canvas"); c.width = 368; c.height = 276
+  const x = c.getContext("2d", { willReadFrequently: true }); x.drawImage(ALT, 0, 0, c.width, c.height)
+  const d = x.getImageData(0, 0, c.width, c.height), p = d.data
+  const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16))
+  const [cr, cg, cb] = hex(BOAT.cut), [pr, pg, pb] = hex(BOAT.panel)
+  for (let i = 0; i < p.length; i += 4) {
+    if (p[i + 3] < 20) continue
+    const light = p[i] > 128
+    p[i] = light ? pr : cr; p[i + 1] = light ? pg : cg; p[i + 2] = light ? pb : cb
+  }
+  // the tabs are light in the alt logo; on a cut they read as openings too
+  for (let y = 0; y < c.height * 0.17; y++) for (let q = 0; q < c.width; q++) { const i = (y * c.width + q) * 4
+    if (p[i + 3] >= 20) { p[i] = cr; p[i + 1] = cg; p[i + 2] = cb } }
+  x.putImageData(d, 0, 0); CUT = c; return CUT
+}
+function barge(t) {
+  const x0 = 470, x1 = 1110, top = 800 + ROCK(t), panelH = 92, r = 46
+  const y1 = top + panelH, hullH = 40
+  // hull: dark, rounded ends, with the black rubber bumper line
+  ctx.fillStyle = BOAT.hull
+  ctx.beginPath(); ctx.moveTo(x0 + r, y1); ctx.lineTo(x1 - r, y1); ctx.quadraticCurveTo(x1 + 6, y1, x1 + 6, y1 + hullH * .5)
+  ctx.quadraticCurveTo(x1, y1 + hullH, x1 - r, y1 + hullH); ctx.lineTo(x0 + r, y1 + hullH)
+  ctx.quadraticCurveTo(x0, y1 + hullH, x0 - 6, y1 + hullH * .5); ctx.quadraticCurveTo(x0 - 6, y1, x0 + r, y1); ctx.fill()
+  ctx.fillStyle = BOAT.hullLine; ctx.fillRect(x0 + 10, y1 + 10, x1 - x0 - 20, 6)
+  // the panels: rounded at both ends, a wood rim on top
+  ctx.save()
+  ctx.beginPath(); ctx.moveTo(x0 + r, top); ctx.lineTo(x1 - r, top); ctx.quadraticCurveTo(x1, top, x1, top + r)
+  ctx.lineTo(x1, y1); ctx.lineTo(x0, y1); ctx.lineTo(x0, top + r); ctx.quadraticCurveTo(x0, top, x0 + r, top); ctx.closePath()
+  ctx.fillStyle = BOAT.panel; ctx.fill(); ctx.clip()
+  // panel seams and cut-out sunbursts, like the boats' papel picado panels
+  const n = 7, pw = (x1 - x0) / n
+  for (let i = 0; i < n; i++) {
+    const cx = x0 + pw * (i + .5), cy = top + panelH * .55
+    if (i % 2 === 1) {                   // every other panel: the DEVSA mark cut through the metal
+      ctx.fillStyle = BOAT.panelDark; ctx.fillRect(x0 + pw * i - 2, top, 4, panelH)
+      const cut = cutMark(); if (cut) { const lh = panelH * .7, lw = lh * cut.width / cut.height
+        ctx.drawImage(cut, cx - lw / 2, top + (panelH - lh) / 2 + 3, lw, lh) }
+      // the small punched holes papel picado has round its edge
+      ctx.fillStyle = BOAT.cut
+      for (const dx of [-1, 1]) for (const yy of [top + 12, y1 - 12]) { ctx.beginPath(); ctx.arc(cx + dx * pw * .42, yy, 3, 0, TAU); ctx.fill() }
+      for (let k = 0; k < 5; k++) { ctx.beginPath(); ctx.arc(cx - pw * .3 + k * pw * .15, top + 9, 2, 0, TAU); ctx.fill() }
+      continue
+    }
+    ctx.fillStyle = BOAT.panelDark; ctx.fillRect(x0 + pw * i - 2, top, 4, panelH)
+    ctx.fillStyle = BOAT.cut
+    ctx.beginPath(); ctx.arc(cx, cy, 9, 0, TAU); ctx.fill()
+    for (let k = 0; k < 12; k++) { const a = k * TAU / 12
+      ctx.save(); ctx.translate(cx + Math.cos(a) * 21, cy + Math.sin(a) * 21); ctx.rotate(a)
+      ctx.beginPath(); ctx.ellipse(0, 0, 7, 3, 0, 0, TAU); ctx.fill(); ctx.restore() }
+    for (const dx of [-1, 1]) { ctx.beginPath(); ctx.arc(cx + dx * pw * .42, top + 20, 3, 0, TAU); ctx.fill()
+      ctx.beginPath(); ctx.arc(cx + dx * pw * .42, y1 - 18, 3, 0, TAU); ctx.fill() }
+  }
+  ctx.restore()
+  ctx.fillStyle = BOAT.rim
+  ctx.beginPath(); ctx.moveTo(x0 + r, top - 6); ctx.lineTo(x1 - r, top - 6); ctx.quadraticCurveTo(x1 + 2, top - 6, x1 + 2, top + r - 4)
+  ctx.lineTo(x1 - 4, top + r - 4); ctx.quadraticCurveTo(x1 - 4, top, x1 - r, top); ctx.lineTo(x0 + r, top)
+  ctx.quadraticCurveTo(x0 + 4, top, x0 + 4, top + r - 4); ctx.lineTo(x0 - 2, top + r - 4); ctx.quadraticCurveTo(x0 - 2, top - 6, x0 + r, top - 6); ctx.fill()
+  // the wake behind it
+  for (let k = 0; k < 4; k++) { const u = ((t / LT) * 8 + k / 4) % 1
+    ctx.fillStyle = `rgba(235,235,235,${(.45 * (1 - u)).toFixed(2)})`
+    ctx.fillRect(x0 - 20 - u * 220, y1 + 24 + (k % 2) * 10, 30 + u * 40, 5) }
+}
+
+// the rider: Linux San Antonio's pixel penguin (drawn by DEVSA for the group), nodding to the beat
+const RIDER = new Image(); RIDER.src = "penguin.png"
+const ALT = new Image(); ALT.src = "devsa-alt-logo.svg"
+// PySanAntonio's mascot, as drawn: never pixelated (it would clash with the PySA wordmark)
+const PYSA = new Image(); PYSA.src = "pysa-mascot-full.webp"
+// DEVSA FM's agents riding along, seated behind the panels: one up front, one between Tux and the
+// mascot, one at the stern; each nods on the beat at its own offset and looks about at the river
+const PASSENGERS = [{ x: 530, tint: TEAL, seed: 3, ph: .25 }, { x: 832, tint: PINK, seed: 6, ph: .5 }, { x: 1066, tint: ORANGE, seed: 13, ph: .75 }]
+function passengers(t) {
+  for (const a of PASSENGERS) {
+    const b = (0.5 - 0.5 * Math.cos(((beatPh(t) + a.ph) % 1) * TAU)) * 3
+    drawPlush(ctx, { x: a.x, y: 842 + ROCK(t) - b, s: 1.02, tint: a.tint, number: "", t, seed: a.seed,
+      look: 4 * Math.sin(t * .4 + a.seed), mouth: .35 + .25 * Math.sin(t * .9 + a.seed), lean: .03 * Math.sin(t * .7 + a.seed) })
+  }
+}
+function penguin(t) {
+  if (!RIDER.complete) return
+  const beat = beatPh(t), bob = (0.5 - 0.5 * Math.cos(beat * TAU)) * 3
+  const h = 250, w = h * RIDER.width / RIDER.height
+  ctx.imageSmoothingEnabled = false
+  ctx.drawImage(RIDER, 690 - w / 2, 860 - h + ROCK(t) + bob, w, h)
+  ctx.imageSmoothingEnabled = true
+  if (PYSA.complete) {                        // a half-beat behind the penguin, so they don't nod in unison
+    const b2 = (0.5 - 0.5 * Math.cos(((beat + .5) % 1) * TAU)) * 3
+    // standing on the deck, like the GO RIO guide at the back; the panels hide his legs
+    const ph = 400, pw2 = ph * PYSA.width / PYSA.height
+    ctx.drawImage(PYSA, 960 - pw2 / 2, 890 - ph + ROCK(t) + b2 / 2, pw2, ph)
+  }
+}
+
+// --- in colour, over the ASCII ---
+const CYPRESS = [[38, 26, 7], [50, 20, 6], [62, 24, 6], [100, 22, 6], [112, 28, 8], [140, 21, 6]]
+const glowDot = (x, y, r, col, a) => { const gr = ctx.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, `rgba(${col},${a.toFixed(3)})`); gr.addColorStop(1, `rgba(${col},0)`)
+  ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill() }
+
+// warm lights strung through the cypresses, twinkling, and their glints on the water
+function treeLights(t) {
+  ctx.save(); ctx.globalCompositeOperation = "lighter"
+  CYPRESS.forEach(([cx, h, w], ti) => {
+    const top = 44 - h
+    for (let i = 0; i < 30; i++) {
+      const a = hash(ti * 50 + i, 1) * TAU, rr = Math.sqrt(hash(ti * 50 + i, 2))
+      const x = (cx + Math.cos(a) * rr * w * .95) * CELL, y = (top + 2 + h * .32 + Math.sin(a) * rr * h * .3) * CELL
+      const tw = .55 + .45 * Math.sin(TAU * (2 + i % 3) * t / LT + i * 2.1)
+      glowDot(x, y, 9, "255,196,120", .32 * tw); ctx.fillStyle = `rgba(255,222,160,${(.55 + .45 * tw).toFixed(2)})`; ctx.beginPath(); ctx.arc(x, y, 2.2, 0, TAU); ctx.fill()
+    }
+    for (let k = 0; k < 5; k++) {                                  // their glints in the river
+      const y = 640 + k * 14, wob = Math.sin(TAU * 3 * t / LT + k + ti) * 8
+      ctx.fillStyle = `rgba(255,200,130,${(.12 * (1 - k / 6) * (.7 + .5 * pulseAt(t))).toFixed(3)})`
+      ctx.fillRect(cx * CELL - w * 6 + wob, y, w * 12 * (.5 + .5 * hash(k, ti)), 3)
+    }
+  })
+  ctx.restore()
+}
+
+// the café umbrellas along the walk, in the brand colours, a lit table under each
+const UMBRELLAS = [70, 170, 280, 400, 520, 640, 1270, 1380, 1490, 1600]
+function umbrellas(t) {
+  UMBRELLAS.forEach((x, i) => {
+    const col = [TEAL, PINK, ORANGE][i % 3], y = 552
+    ctx.save(); ctx.globalCompositeOperation = "lighter"
+    glowDot(x, 600, 46, "255,190,110", .3)                                    // the table's candle and string light
+    ctx.restore()
+    ctx.fillStyle = "#2b2b2b"; ctx.fillRect(x - 1.5, y, 3, 50)                 // the pole
+    ctx.fillStyle = "#3a3330"; ctx.fillRect(x - 16, 596, 32, 4)                // the table
+    ctx.fillStyle = "rgba(255,214,150,.9)"; ctx.beginPath(); ctx.arc(x, 593, 2.5, 0, TAU); ctx.fill()   // its candle
+    ctx.fillStyle = col; ctx.beginPath(); ctx.moveTo(x - 34, y + 4)                  // the canopy, with a scalloped hem
+    ctx.quadraticCurveTo(x, y - 22, x + 34, y + 4)
+    for (let k = 0; k < 6; k++) { const a = x + 34 - k * 68 / 6; ctx.quadraticCurveTo(a - 5.7, y + 10, a - 11.3, y + 4) }
+    ctx.closePath(); ctx.fill()
+    ctx.fillStyle = "rgba(255,255,255,.18)"; ctx.beginPath(); ctx.moveTo(x - 20, y - 2); ctx.quadraticCurveTo(x, y - 18, x + 8, y - 12); ctx.quadraticCurveTo(x - 4, y - 6, x - 20, y - 2); ctx.fill()
+    // and its colour in the river below, pulsing a little on the beat
+    ctx.save(); ctx.globalCompositeOperation = "lighter"
+    for (let k = 0; k < 4; k++) { const wob = Math.sin(TAU * 3 * t / LT + k * 1.4 + i) * 6
+      ctx.globalAlpha = (.22 - k * .045) * (.75 + .4 * pulseAt(t)); ctx.fillStyle = col; ctx.fillRect(x - 26 + wob, 636 + k * 12, 52 - k * 8, 3) }
+    ctx.restore()
+  })
+}
+
+// two ducks drifting upstream, once a cycle, with a V of ripples behind them
+function ducks(t) {
+  const p = ((t / LT) + .35) % 1, x0 = lerp(2040, -140, p)
+  for (const [dx, dy] of [[0, 0], [46, 10]]) {
+    const x = x0 + dx, y = 712 + dy + Math.sin(TAU * 6 * t / LT + dx) * 1.5
+    ctx.strokeStyle = "rgba(220,220,220,.35)"; ctx.lineWidth = 1.5
+    ctx.beginPath(); ctx.moveTo(x + 14, y + 6); ctx.lineTo(x + 60, y - 4); ctx.moveTo(x + 14, y + 8); ctx.lineTo(x + 60, y + 18); ctx.stroke()
+    ctx.fillStyle = "#cfc9bb"; ctx.beginPath(); ctx.ellipse(x + 10, y, 18, 7, 0, 0, TAU); ctx.fill()
+    ctx.fillStyle = dx ? "#8a8270" : "#2f5d46"; ctx.beginPath(); ctx.arc(x - 6, y - 9, 6, 0, TAU); ctx.fill()   // a drake and a hen
+    ctx.fillStyle = "#e8a23a"; ctx.beginPath(); ctx.moveTo(x - 11, y - 10); ctx.lineTo(x - 19, y - 8); ctx.lineTo(x - 11, y - 7); ctx.fill()
+    ctx.fillStyle = "rgba(207,201,187,.18)"; ctx.beginPath(); ctx.ellipse(x + 10, y + 12, 16, 4, 0, 0, TAU); ctx.fill()
+  }
+}
+
+// the boat drifts downstream across the frame, then out under the stone bridge in the foreground
+const boatDX = t => { const p = (t % LT) / LT; return p < .86 ? lerp(-1250, 1560, p / .86) : 1560 }
+
+// the near bridge: a stone arch at the right edge, in front of everything, in the same ASCII
+// grain; a couple has stopped on it to look at the river
+function nearBridge(t) {
+  const shape = new Path2D()
+  shape.moveTo(1730, 388); shape.lineTo(1940, 388); shape.lineTo(1940, 500)
+  shape.quadraticCurveTo(1826, 510, 1812, 660); shape.lineTo(1812, 1090); shape.lineTo(1730, 1090); shape.closePath()
+  ctx.fillStyle = "#181614"; ctx.fill(shape)
+  ctx.save(); ctx.clip(shape)
+  ctx.font = `700 ${CELL + 1}px "Geist Mono"`; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+  for (let y = 384; y < 1090; y += CELL) for (let x = 1728; x < 1944; x += CELL) {   // coursed stone, in characters
+    const course = Math.floor(y / CELL), joint = (Math.floor(x / CELL) + (course % 2) * 2) % 4 === 0
+    const ch = joint ? "|" : course % 3 === 0 ? "=" : "#"
+    ctx.fillStyle = `rgba(200,190,175,${(joint ? .18 : .12 + .08 * hash(x, y)).toFixed(2)})`; ctx.fillText(ch, x + 6, y + 6)
+  }
+  const warm = ctx.createLinearGradient(1730, 0, 1940, 0); warm.addColorStop(0, "rgba(255,190,120,.16)"); warm.addColorStop(1, "rgba(255,190,120,0)")
+  ctx.fillStyle = warm; ctx.fillRect(1730, 388, 210, 702)
+  ctx.restore()
+  ctx.strokeStyle = "rgba(255,210,160,.55)"; ctx.lineWidth = 2                      // the lit edges: deck, arch, pier
+  ctx.beginPath(); ctx.moveTo(1730, 388); ctx.lineTo(1940, 388); ctx.stroke()
+  ctx.beginPath(); ctx.moveTo(1940, 500); ctx.quadraticCurveTo(1826, 510, 1812, 660); ctx.lineTo(1812, 1090); ctx.stroke()
+  // the parapet, its balusters, a lamp on the corner
+  ctx.fillStyle = "#24211e"; ctx.fillRect(1730, 352, 210, 8); ctx.fillRect(1730, 380, 210, 8)
+  for (let x = 1738; x < 1940; x += 16) ctx.fillRect(x, 360, 7, 20)
+  ctx.fillStyle = "#24211e"; ctx.fillRect(1742, 300, 6, 52); ctx.fillStyle = "#ffe2a8"; ctx.fillRect(1737, 290, 16, 12)
+  ctx.save(); ctx.globalCompositeOperation = "lighter"; glowDot(1745, 296, 70, "255,210,150", .35); ctx.restore()
+  // the couple, leaning on the parapet, looking down the river; one turns to the other now and then
+  const turn = Math.sin(TAU * 2 * t / LT) > .6 ? 1 : 0
+  for (const [x, hgt, c] of [[1820, 64, "#14120f"], [1848, 58, "#17140f"]]) {
+    ctx.fillStyle = c
+    ctx.beginPath(); ctx.arc(x + (x === 1820 ? turn * 3 : 0), 352 - hgt + 8, 8, 0, TAU); ctx.fill()
+    ctx.beginPath(); ctx.roundRect(x - 10, 352 - hgt + 16, 20, hgt - 18, 6); ctx.fill()
+  }
+}
+
+function render(t) {
+  t = ((t % T) + T) % T
+  paint(t)
+  const d = g.getImageData(0, 0, COLS, ROWS).data
+  ctx.fillStyle = "#0c0c0c"; ctx.fillRect(0, 0, W, H)
+  ctx.font = `700 ${CELL + 1}px "Geist Mono"`; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    const v = d[(y * COLS + x) * 4] / 255
+    const ch = RAMP[Math.min(RAMP.length - 1, Math.floor(v * RAMP.length))]
+    if (ch === " ") continue
+    ctx.fillStyle = `rgba(235,235,235,${(.25 + v * .75).toFixed(2)})`
+    ctx.fillText(ch, x * CELL + CELL / 2, y * CELL + CELL / 2 + 1)
+  }
+  treeLights(t)
+  umbrellas(t)
+  ducks(t)
+  ctx.save(); ctx.translate(boatDX(t), 0)
+  passengers(t)
+  penguin(t)
+  barge(t)
+  ctx.restore()
+  nearBridge(t)
+
+  // now playing, bottom right, opposite DEVSA FM; the credit rotates if there are several tracks
+  const cr = window.CREDITS && window.CREDITS.length ? window.CREDITS : ['"Tejano Lofi" by Patrick · made with Suno']
+  const line = cr[Math.floor(t / 15) % cr.length]
+  ctx.textAlign = "right"; ctx.textBaseline = "alphabetic"
+  ctx.font = '500 20px "Geist"'; ctx.fillStyle = "rgba(255,255,255,0.75)"
+  ctx.fillText("♪  " + line, W - 60, H - 52)
+  // bottom left: who this is
+  ctx.textAlign = "left"; ctx.font = '700 22px "Geist Mono"'; ctx.fillStyle = "rgba(255,255,255,0.8)"
+  ctx.letterSpacing = "3px"; ctx.fillText("DEVSA FM  ·  devsa.community", 60, H - 52); ctx.letterSpacing = "0px"
+  const tw = 46
+  ;[TEAL, PINK, ORANGE].forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(60 + i * (tw + 6), H - 40, tw, 6) })
+}
+
+window.render = render
+window.ready = Promise.all([document.fonts.load('700 20px "Geist Mono"'), document.fonts.load('500 20px "Geist"'), loadIcons(), load_mark(), ...[RIDER, ALT, PYSA].map(i => i.complete ? 0 : new Promise(r => { i.onload = r; i.onerror = r }))])
+  .then(() => { paint(0); return new Promise(r => setTimeout(r, 300)) })
+window.ready.then(() => {
+  if (new URLSearchParams(location.search).has("still")) return render(8)
+  const t0 = performance.now()
+  ;(function loop() { render((performance.now() - t0) / 1000); requestAnimationFrame(loop) })()
+})
+</script>
+</body>
+</html>

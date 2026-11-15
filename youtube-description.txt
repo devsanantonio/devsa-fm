@@ -1,0 +1,19 @@
+Title:
+DEVSA FM · Tejano lofi radio for San Antonio's learners and builders
+
+Description:
+DEVSA FM: Tejano lofi radio for San Antonio's learners and builders.
+
+Press play and keep building. On screen, San Antonio in ASCII, a new scene with every song:
+· a night bus past Mission San José and the big boots
+· glowing fish under the bridge on the Museum Reach, a nod to Donald Lipski's F.I.S.H.
+· a game between two agents, Patch and Lint, down to the buzzer
+· midnight at the Alamo Python taco truck, shipping a localhost:210 starter
+· a concert in front of the Rand Building
+· the River Walk at night
+
+Find your next meetup: https://www.devsa.community/events
+Join the community: https://www.devsa.community/discord
+
+Music:
+"Tejano Lofi" by Patrick · made with Suno

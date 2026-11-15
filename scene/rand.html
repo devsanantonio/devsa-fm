@@ -1,0 +1,280 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: "Geist Mono"; font-weight: 700; src: url(fonts/GeistMono-Bold.woff2) format("woff2"); }
+  @font-face { font-family: "Geist"; font-weight: 500; src: url(fonts/Geist-Medium.woff2) format("woff2"); }
+  html, body { margin: 0; background: #0c0c0c; overflow: hidden }
+  canvas { display: block }
+</style>
+</head>
+<body>
+<!--
+  DEVSA FM, the Rand Building: a night concert on Houston Street. PySanAntonio's mascot plays on
+  a riser in front of the Rand Building (110 E Houston St, 1913), whose windows run a light show
+  to the beat; an ASCII crowd nods along out front.
+  The building is drawn from its proportions (cream base, six brick floors, cream attic, heavy
+  cornice, two flagpoles), not traced from any photo.
+  1920x1080, a seamless T-second loop: render(t) draws a frame.
+-->
+<canvas id="c" width="1920" height="1080"></canvas>
+<script>
+// synced: render.cjs passes the song's beat grid and loudness (tools/beats.py) and the loop is the
+// song's length, so the windows flash on the real beat. Opened on its own, it runs a 60 s loop at 76.
+const B = window.BEATS || null
+const T = window.LOOP_T || 60, W = 1920, H = 1080, TAU = Math.PI * 2
+const TEAL = "#00b2a9", PINK = "#ef426f", ORANGE = "#ff8200"
+const BPM = B ? B.bpm : 76, OFFSET = B ? B.offset : 0
+// loudness, smoothed over ~6 s: the quiet stretches are where the phones come out
+const ENERGY = B ? B.energy.map((_, i, e) => { let s = 0, n = 0; for (let k = i - 6; k <= i + 6; k++) if (e[k] !== undefined) { s += e[k]; n++ } return s / n }) : null
+const loud = t => { if (!ENERGY) return .5 + .5 * Math.sin(TAU * t / T); const i = t * 2, a = Math.floor(i), f = i - a; return (ENERGY[Math.min(a, ENERGY.length - 1)] * (1 - f) + ENERGY[Math.min(a + 1, ENERGY.length - 1)] * f) }
+const LOUD_LO = ENERGY ? Math.min(...ENERGY) : 0, LOUD_HI = ENERGY ? Math.max(...ENERGY) : 1
+const quiet = t => 1 - (loud(t) - LOUD_LO) / (LOUD_HI - LOUD_LO + 1e-9)
+const cycles = k => Math.max(1, Math.round(k * T / 60))   // k cycles a minute, a whole number a loop
+const ctx = document.getElementById("c").getContext("2d")
+const CELL = 12, COLS = W / CELL, ROWS = H / CELL      // 160 x 90 characters
+const RAMP = " .,:;-=+*#%@"
+
+const sc = document.createElement("canvas"); sc.width = COLS; sc.height = ROWS
+const g = sc.getContext("2d", { willReadFrequently: true })
+const gray = v => { const c = Math.round(Math.max(0, Math.min(1, v)) * 255); return `rgb(${c},${c},${c})` }
+function box(x, y, w, h, v) { g.fillStyle = gray(v); g.fillRect(x, y, w, h) }
+const hash = (a, b) => { const s = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return s - Math.floor(s) }
+
+// the beat: n is the beat number, pulse flashes on each beat and decays
+const beatAt = t => { const bc = (t - OFFSET) * BPM / 60, n = Math.floor(bc), ph = bc - n; return { n: ((n % 1e6) + 1e6) % 1e6, bc, ph, pulse: Math.exp(-ph * 3.5) } }
+
+// the building, in cells
+const BX0 = 34, BX1 = 126, TOP = 9, BASE = 70
+const BAYS = 10, BAYW = (BX1 - BX0) / BAYS
+const FLOORS = 6, FLOOR_TOP = 16, FLOOR_H = 6           // the six brick floors
+const ATTIC = 10, BASE_TOP = FLOOR_TOP + FLOORS * FLOOR_H // the cream attic floor, the cream base
+
+// the DEVSA mark, >SA_, in the windows: 20 columns (two windows a bay) by 7 rows (attic + six floors)
+// the mascot stands in front of the middle bays (window columns 8-11), so the mark flanks him:
+// ">S" in columns 0-7, "A_" in columns 12-19
+const GLYPH = {
+  ">": ["X...", ".X..", "..X.", "...X", "..X.", ".X..", "X..."],
+  "S": [".XXX", "X...", "X...", ".XX.", "...X", "...X", "XXX."],
+  "A": [".XX.", "X..X", "X..X", "XXXX", "X..X", "X..X", "X..X"],
+  "_": ["...", "...", "...", "...", "...", "CCC", "CCC"],   // the cursor, a thick bar, blinking on the beat
+}
+const MARK = [0, 1, 2, 3, 4, 5, 6].map(r => GLYPH[">"][r] + GLYPH.S[r] + "...." + GLYPH.A[r] + "." + GLYPH._[r])
+function markAt(col, f, beat) {
+  const c = MARK[f][col]
+  if (c === "X") return .6 + .4 * beat.pulse
+  if (c === "C") return beat.n % 2 === 0 ? 1 : 0
+  return 0
+}
+
+// the light show: how lit window (bay b, side 0/1, floor f; f = 0 is the attic, 1..6 the brick floors) is
+function lit(b, f, beat, side) {
+  const { n, pulse } = beat, pat = Math.floor(n / 8) % 4
+  if (n % 8 >= 6) return 0                                                                                                                 // the mark's beats: drawn as whole panels, in paint()
+  if (pat === 0) { const d = Math.min(Math.abs(b - n % BAYS), BAYS - Math.abs(b - n % BAYS)); return d === 0 ? 1 : d === 1 ? .45 : 0 }   // a sweep
+  if (pat === 1) { const h = 1 + Math.floor(hash(b, n) * 7); return 7 - f <= h ? .55 + .45 * pulse : 0 }                                   // equalizer bars, rising from the street
+  if (pat === 2) return (b + f + n) % 2 === 0 ? .4 + .6 * pulse : 0                                                                       // a checkerboard, flipping each beat
+  return f === 6 - (n % 7) ? 1 : (hash(b * 3, f + n) > .86 ? .6 * pulse : 0)                                                              // a floor rising, with sparkles
+}
+
+function paint(t) {
+  const beat = beatAt(t)
+  box(0, 0, COLS, ROWS, .03)
+  // stars over the roofline
+  let st = 9; const sr = () => (st = (st * 16807) % 2147483647) / 2147483647
+  for (let i = 0; i < 40; i++) {
+    const x = Math.floor(sr() * COLS), y = Math.floor(sr() * 14), k = cycles(1 + Math.floor(sr() * 4)), ph = sr() * TAU
+    box(x, y, 1, 1, .25 + .3 * sr() + .15 * Math.sin(TAU * k * t / T + ph))
+  }
+
+  // the neighbours, dim: a stepped tower on the left, a tall block on the right
+  box(4, 22, 22, BASE - 22, .1); box(8, 16, 14, 6, .1); box(13, 10, 4, 6, .1); box(14, 6, 2, 4, .18)
+  box(134, 14, 24, BASE - 14, .1)
+  for (let y = 26; y < BASE - 6; y += 5) for (let x = 6; x < 24; x += 4) if (hash(x, y) > .6) box(x, y, 2, 2, .3)
+  for (let y = 18; y < BASE - 6; y += 5) for (let x = 136; x < 156; x += 4) if (hash(x, y * 2) > .55) box(x, y, 2, 2, .28)
+
+  // the Rand Building
+  box(BX0, TOP, BX1 - BX0, BASE - TOP, .42)                                        // cream terra cotta
+  box(BX0, FLOOR_TOP - 1, BX1 - BX0, BASE_TOP - FLOOR_TOP + 1, .15)                // the brick floors
+  for (let f = 1; f < FLOORS; f++) box(BX0, FLOOR_TOP + f * FLOOR_H - 1, BX1 - BX0, 1, .34)   // the sill courses
+  box(BX0 - 2, TOP - 2, BX1 - BX0 + 4, 3, .62)                                     // the cornice
+  for (let x = BX0 - 1; x < BX1 + 1; x += 2) box(x, TOP + 1, 1, 1, .45)            // dentils
+  box(BX0, BASE_TOP, BX1 - BX0, 1, .55)                                            // the belt over the base
+  // flagpoles and flags, waving
+  for (const px of [BX0 + 6, BX1 - 6]) {
+    box(px, 0, 1, TOP - 2, .4)
+    for (let k = 0; k < 6; k++) box(px + 1 + k, 1 + Math.round(Math.sin(TAU * cycles(3) * t / T + k * .7 + px) * .7), 1, 3, .42)
+  }
+  // the windows, every one in the show
+  for (let b = 0; b < BAYS; b++) {
+    const cx = BX0 + b * BAYW + BAYW / 2
+    // the attic: small paired windows
+    ;[-3, 1].forEach((dx, side) => box(Math.round(cx + dx), ATTIC + 1, 2, 2, .06 + .9 * lit(b, 0, beat, side)))
+    // the brick floors: paired windows
+    for (let f = 1; f <= FLOORS; f++) {
+      const y = FLOOR_TOP + (f - 1) * FLOOR_H + 1
+      ;[-3.5, .5].forEach((dx, side) => box(Math.round(cx + dx), y, 3, 3, .06 + .9 * lit(b, f, beat, side)))
+    }
+    // the base: a tall storefront window per bay, glowing warm and pulsing with the low end
+    box(Math.round(cx - 3), BASE_TOP + 2, 7, BASE - BASE_TOP - 4, .24 + .12 * beat.pulse)
+    box(Math.round(cx - 3), BASE_TOP + 2, 7, 1, .5)
+  }
+
+  // the big moment, the last two beats of every eight: the front becomes a sign and spells >SA_,
+  // each pixel a whole panel (window and brick around it), so the letters read as solid strokes
+  if (beat.n % 8 >= 6) for (let f = 0; f < 7; f++) for (let col = 0; col < 20; col++) {
+    const v = markAt(col, f, beat); if (!v) continue
+    const x = BX0 + col * BAYW / 2 + .4, y = f === 0 ? ATTIC : FLOOR_TOP + (f - 1) * FLOOR_H
+    box(Math.round(x), y, Math.round(BAYW / 2 - .8), f === 0 ? 4 : FLOOR_H - 1, .25 + .75 * v)
+  }
+
+  // the street, the curb, a lamp at each end
+  box(0, BASE, COLS, ROWS - BASE, .07); box(0, BASE, COLS, 1, .28)
+  for (const lx of [30, 130]) { box(lx, 50, 1, BASE - 50, .35); box(lx - 1, 49, 3, 1, 1) }
+
+  // the riser and the speaker stacks, cones thumping on the beat
+  box(62, 67, 36, 3, .38); box(62, 67, 36, 1, .6)
+  for (const sx of [54, 101]) {
+    box(sx, 55, 6, 15, .26)
+    for (const cy of [58, 64]) { g.fillStyle = gray(.45 + .45 * beat.pulse); g.beginPath(); g.ellipse(sx + 3, cy, 1.6 + .5 * beat.pulse, 1.6 + .5 * beat.pulse, 0, 0, TAU); g.fill() }
+  }
+
+  // the crowd: three rows of heads and shoulders, nodding on alternating beats, hands up now and then
+  for (let row = 0; row < 3; row++) {
+    const y0 = 73 + Math.round(row * 3.5), v = .34 + row * .08
+    for (let x = 3 + row * 3; x < COLS - 2; x += 7 + (row % 2)) {
+      const nod = (beat.n + x + row) % 2 === 0 ? Math.round(beat.pulse * .9) : 0
+      const hx = x + Math.round(hash(x, row) * 2)
+      g.fillStyle = gray(v + .14); g.beginPath(); g.ellipse(hx, y0 - nod, 1.6, 1.5, 0, 0, TAU); g.fill()
+      g.fillStyle = gray(v); g.beginPath(); g.ellipse(hx, y0 + 3, 3.2, 1.8, 0, 0, TAU); g.fill()
+      if (hash(hx, beat.n + row) > .82) box(hx + 2, y0 - 4, 1, 4, v + .12)         // a hand up
+    }
+  }
+
+  // haze in the stage lights: soft drifting ASCII inside each beam, so they read as light through air
+  g.save(); g.globalCompositeOperation = "lighten"
+  for (const bm of beams(t)) {
+    const ox = bm.x / CELL, oy = 800 / CELL, len = 900 / CELL, dx = Math.sin(bm.a), dy = -Math.cos(bm.a)
+    for (let u = .08; u < 1; u += .012) for (let v = -1; v <= 1; v += .06) {
+      const w = (110 / CELL) * u + .7
+      const x = ox + dx * len * u + Math.cos(bm.a) * v * w, y = oy + dy * len * u + Math.sin(bm.a) * v * w
+      const n = Math.sin(u * 9 - TAU * cycles(1) * t / T + v * 2 + bm.ph) * Math.sin(u * 4 + TAU * cycles(.5) * t / T * .5 + v * 3.1 + bm.ph * 2)
+      const val = (.16 + .28 * Math.max(0, n)) * (1 - u * .7) * (1 - Math.abs(v) * .45)
+      if (val > .07) { g.fillStyle = gray(val); g.fillRect(Math.round(x), Math.round(y), 1, 1) }
+    }
+  }
+  g.restore()
+}
+
+// the stage lights: where each beam points at time t (shared by the haze and the colour)
+const beams = t => [[740, TEAL, 0], [960, PINK, 1.7], [1180, ORANGE, 3.4]].map(([x, c, ph]) => ({ x, c, ph, a: Math.sin(TAU * cycles(2) * t / T + ph) * .45 }))
+
+// PySanAntonio's mascot, as drawn: never pixelated.
+const PYSA = new Image(); PYSA.src = "pysa-mascot-full.webp"
+
+// three stage lights in the brand colours, sweeping up the facade
+function stageLights(t, beat) {
+  ctx.save(); ctx.globalCompositeOperation = "lighter"
+  beams(t).forEach(({ x, c, a }) => {
+    const len = 900
+    const ex = x + Math.sin(a) * len, ey = 800 - Math.cos(a) * len, spread = 110
+    const gr = ctx.createLinearGradient(x, 800, ex, ey)
+    gr.addColorStop(0, c + "55"); gr.addColorStop(1, c + "00")
+    ctx.fillStyle = gr; ctx.globalAlpha = .55 + .45 * beat.pulse
+    ctx.beginPath(); ctx.moveTo(x - 8, 800); ctx.lineTo(ex - spread * Math.cos(a), ey - spread * Math.sin(a)); ctx.lineTo(ex + spread * Math.cos(a), ey + spread * Math.sin(a)); ctx.lineTo(x + 8, 800); ctx.closePath(); ctx.fill()
+  })
+  ctx.restore()
+}
+
+function performers(t, beat) {
+  // a soft spot on the riser
+  ctx.save(); ctx.globalCompositeOperation = "lighter"
+  const sp = ctx.createRadialGradient(960, 760, 0, 960, 760, 300)
+  sp.addColorStop(0, "rgba(255,240,210,.16)"); sp.addColorStop(1, "rgba(0,0,0,0)")
+  ctx.fillStyle = sp; ctx.fillRect(600, 420, 720, 420); ctx.restore()
+  if (PYSA.complete && PYSA.width) {           // swaying from the boots, nodding on the beat
+    const ph = 470, pw = ph * PYSA.width / PYSA.height
+    const sway = Math.sin(TAU * beat.bc / 2) * .018, nod = (0.5 - 0.5 * Math.cos(beat.ph * TAU)) * 4
+    ctx.save(); ctx.translate(960, 806); ctx.rotate(sway)
+    ctx.drawImage(PYSA, -pw / 2, -ph + nod, pw, ph); ctx.restore()
+  }
+}
+
+// phones up in the crowd, more of them the quieter the song: each phone has its own threshold, so
+// they rise and fall one by one rather than all at once
+function phones(t) {
+  const q = quiet(t)
+  for (let i = 0; i < 26; i++) {
+    const a = Math.max(0, Math.min(1, (q - .25 - hash(i, 7) * .6) * 6)); if (!a) continue
+    const x = 120 + hash(i, 1) * 1680; if (x > 610 && x < 1310 && hash(i, 3) < .7) continue   // fewer straight in front of the riser
+    const y = 850 + hash(i, 2) * 90, sway = Math.sin(TAU * cycles(4 + (i % 3)) * t / T + i) * 14
+    ctx.save(); ctx.globalAlpha = a
+    ctx.strokeStyle = "rgba(150,150,150,.8)"; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(x, y + 52); ctx.lineTo(x + sway, y + 8); ctx.stroke()   // the arm
+    ctx.globalCompositeOperation = "lighter"
+    const gl = ctx.createRadialGradient(x + sway, y, 0, x + sway, y, 34); gl.addColorStop(0, "rgba(255,255,255,.35)"); gl.addColorStop(1, "rgba(255,255,255,0)")
+    ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(x + sway, y, 34, 0, TAU); ctx.fill()
+    ctx.globalCompositeOperation = "source-over"; ctx.fillStyle = "#f4f7ff"; ctx.fillRect(x + sway - 5, y - 8, 10, 16)   // the screen
+    ctx.restore()
+  }
+}
+
+// string lights across Houston Street, from the edges of the frame toward the speaker stacks
+function stringLights(t) {
+  for (const [x0, y0, x1, y1] of [[-20, 560, 660, 650], [1940, 560, 1260, 650]]) {
+    const at = u => [x0 + (x1 - x0) * u, y0 + (y1 - y0) * u + 70 * Math.sin(Math.PI * u)]
+    ctx.strokeStyle = "rgba(40,40,40,.9)"; ctx.lineWidth = 2; ctx.beginPath()
+    for (let u = 0; u <= 1.001; u += .02) { const [x, y] = at(u); u ? ctx.lineTo(x, y) : ctx.moveTo(x, y) } ctx.stroke()
+    ctx.save(); ctx.globalCompositeOperation = "lighter"
+    for (let i = 0, u = .04; u < 1; i++, u += .062) {
+      const [x, y] = at(u), a = .65 + .35 * Math.sin(TAU * cycles(1 + i % 3) * t / T + i * 1.3)
+      const gl = ctx.createRadialGradient(x, y + 9, 0, x, y + 9, 22); gl.addColorStop(0, `rgba(255,200,120,${(.35 * a).toFixed(2)})`); gl.addColorStop(1, "rgba(0,0,0,0)")
+      ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(x, y + 9, 22, 0, TAU); ctx.fill()
+      ctx.fillStyle = `rgba(255,214,150,${a.toFixed(2)})`; ctx.beginPath(); ctx.ellipse(x, y + 9, 4.5, 6, 0, 0, TAU); ctx.fill()
+    }
+    ctx.restore()
+  }
+}
+
+function render(t) {
+  t = ((t % T) + T) % T
+  const beat = beatAt(t)
+  paint(t)
+  const d = g.getImageData(0, 0, COLS, ROWS).data
+  ctx.fillStyle = "#0c0c0c"; ctx.fillRect(0, 0, W, H)
+  ctx.font = `700 ${CELL + 1}px "Geist Mono"`; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    const v = d[(y * COLS + x) * 4] / 255
+    const ch = RAMP[Math.min(RAMP.length - 1, Math.floor(v * RAMP.length))]
+    if (ch === " ") continue
+    ctx.fillStyle = `rgba(235,235,235,${(.25 + v * .75).toFixed(2)})`
+    ctx.fillText(ch, x * CELL + CELL / 2, y * CELL + CELL / 2 + 1)
+  }
+  stageLights(t, beat)
+  performers(t, beat)
+  phones(t)
+  stringLights(t)
+
+  // footer: who this is, and the music credit
+  const cr = window.CREDITS && window.CREDITS.length ? window.CREDITS : ['"Tejano Lofi" by Patrick · made with Suno']
+  const line = cr[Math.floor(t / 15) % cr.length]
+  ctx.textAlign = "right"; ctx.textBaseline = "alphabetic"
+  ctx.font = '500 20px "Geist"'; ctx.fillStyle = "rgba(255,255,255,0.75)"
+  ctx.fillText("♪  " + line, W - 60, H - 52)
+  ctx.textAlign = "left"; ctx.font = '700 22px "Geist Mono"'; ctx.fillStyle = "rgba(255,255,255,0.8)"
+  ctx.letterSpacing = "3px"; ctx.fillText("DEVSA FM  ·  devsa.community", 60, H - 52); ctx.letterSpacing = "0px"
+  const tw = 46
+  ;[TEAL, PINK, ORANGE].forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(60 + i * (tw + 6), H - 40, tw, 6) })
+}
+
+window.render = render
+window.ready = Promise.all([document.fonts.load('700 20px "Geist Mono"'), document.fonts.load('500 20px "Geist"'),
+  ...[PYSA].map(i => i.complete ? 0 : new Promise(r => { i.onload = r; i.onerror = r }))])
+window.ready.then(() => {
+  if (new URLSearchParams(location.search).has("still")) return render(8)
+  const t0 = performance.now()
+  ;(function loop() { render((performance.now() - t0) / 1000); requestAnimationFrame(loop) })()
+})
+</script>
+</body>
+</html>

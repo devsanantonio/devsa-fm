@@ -1,0 +1,216 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: "Geist Mono"; font-weight: 700; src: url(fonts/GeistMono-Bold.woff2) format("woff2"); }
+  @font-face { font-family: "Geist"; font-weight: 500; src: url(fonts/Geist-Medium.woff2) format("woff2"); }
+  @font-face { font-family: "Geist"; font-weight: 900; src: url(fonts/Geist-Black.woff2) format("woff2"); }
+  html, body { margin: 0; background: #0c0c0c; overflow: hidden }
+  canvas { display: block }
+</style>
+</head>
+<body>
+<!--
+  DEVSA FM, the grocery: DEVSA's own store at dusk, in the River Walk's ASCII style. The building
+  is drawn from San Antonio's newer grocery stores (a stone tower, a roof sloping over a lit glass
+  band, long tan wings, a canopy over the doors), but everything on it is DEVSA's: the alt mark on
+  the tower, the logo's three tabs as the roof, a canopy sign typing what DEVSA is (shop local,
+  community infrastructure, software factory, localhost:210), "Every group. One room." on the left
+  wing, "600+ events since 2024" on the right, and this week's events on a board by the door. Cars
+  pass on the drive; between them the plush agents (plush.js) cross from the doors, each with a
+  basket in its own colour. No real grocer's name or logo is on DEVSA FM.
+  1920x1080, a seamless loop: render(t) draws a frame.
+-->
+<canvas id="c" width="1920" height="1080"></canvas>
+<script src="plush.js"></script>
+<script src="fmkit.js"></script>
+<script>
+const { W, H, TAU, CELL, COLS, TEAL, PINK, ORANGE, ctx, g, LT, lerp, ease, span, clamp01, hash, box, glow, lit, car, footer } = fm
+
+// DEVSA's own store. The tower carries the DEVSA alt mark (no real grocer's name on a public stream; set
+// SIGN to a word to letter it instead). The roof is the logo's three tabs. The canopy over the doors types
+// the four things DEVSA is, one every 15 s, like a terminal: shop local (the community calendar),
+// community infrastructure (the About page), software factory (Agentic Nights), localhost:210 (open data).
+// The left wing carries the roundtable's line, the right wing the calendar's record (the sponsor packet's
+// 600+ since 2024), and the left block's windows are a board of this week's events from devsa.community.
+const SIGN = "logo"
+const CANOPY = ["SHOP LOCAL", "COMMUNITY INFRASTRUCTURE", "SOFTWARE FACTORY", "localhost:210"]
+const MONO = '"Geist Mono"', TABS = [TEAL, PINK, ORANGE]
+const [LOGO, logoReady] = fm.loadImg("devsa-alt-logo.svg")
+const FACADE = 62, WALK = 66, ROAD_TOP = 67, ROAD_BOT = 85          // rows, in cells
+const TX0 = 66, TX1 = 94, TY = 32                                   // the stone tower at the centre
+const roofY = x => 23 + (x - 54) * (8 / 54)                         // the roof, high at the left, sloping right
+
+function paint(t) {
+  // dusk: brighter toward the horizon
+  for (let y = 0; y < ROAD_TOP; y++) box(0, y, COLS, 1, .03 + .1 * (y / ROAD_TOP) ** 2)
+  let st = 7; const sr = () => (st = (st * 16807) % 2147483647) / 2147483647
+  for (let i = 0; i < 40; i++) { const x = Math.floor(sr() * COLS), y = Math.floor(sr() * 20), ph = sr() * TAU; box(x, y, 1, 1, .22 + .2 * sr() + .12 * Math.sin(TAU * 3 * t / LT + ph)) }
+  // parking-lot lights, either end
+  for (const [x, top] of [[8, 24], [151, 22]]) { box(x, top, 1, WALK - top, .34); box(x - 2, top, 5, 1, .36); box(x - 1, top + 1, 3, 1, .95) }
+  // the long wings, tan, with pilasters and a cornice
+  box(0, 40, 56, FACADE - 40, .34); box(106, 40, COLS - 106, FACADE - 40, .34)
+  box(0, 40, 56, 1, .44); box(106, 40, COLS - 106, 1, .44)
+  for (const x of [12, 34, 120, 142]) box(x, 40, 3, FACADE - 40, .42)
+  box(18, 49, 30, FACADE - 49, .44); box(18, 49, 30, 1, .52)                     // the lower stone block, left
+  box(20, 59, 26, FACADE - 59, .2)                                                // the pickup door
+  // the canopy on the right, its shade and its railing
+  box(108, 49, COLS - 108, 2, .3); box(108, 51, COLS - 108, FACADE - 51, .14)
+  for (let x = 110; x < COLS; x += 2) box(x, 57, 1, FACADE - 57, .32); box(108, 57, COLS - 108, 1, .34)
+  // the glass band under the roof, lit, and the roof's shadow line
+  for (let x = 56; x < 107; x++) { const top = Math.ceil(roofY(x)) + 1; for (let y = top; y < 33; y++) box(x, y, 1, 1, (x % 5 === 0 || y === top) ? .3 : .55 + .1 * hash(x, y)) }
+  // brown panels either side of the tower
+  for (const [x0, x1] of [[56, TX0], [TX1, 107]]) for (let x = x0; x < x1; x++) box(x, 33, 1, FACADE - 33, x % 2 ? .2 : .25)
+  // the stone tower: light block, coursed
+  box(TX0, TY, TX1 - TX0, FACADE - TY, .58)
+  for (let y = TY + 2; y < FACADE; y += 3) box(TX0, y, TX1 - TX0, 1, .5)
+  // the entry: glass doors under the canopy
+  box(TX0 + 4, 51, TX1 - TX0 - 8, FACADE - 51, .2)
+  for (let y = 53; y < FACADE; y++) for (let x = TX0 + 5; x < TX1 - 4; x++) box(x, y, 1, 1, (x - TX0) % 4 === 0 ? .25 : .6 + .14 * hash(x, y))
+  // sidewalk, the drive, its lane line, the far curb
+  box(0, FACADE, COLS, WALK - FACADE, .26); box(0, WALK, COLS, 1, .42)
+  for (let y = ROAD_TOP; y < ROAD_BOT; y++) for (let x = 0; x < COLS; x++) box(x, y, 1, 1, .1 + .05 * hash(x, y))
+  for (let x = 2; x < COLS; x += 12) if (x < 66 || x > 100) box(x, 76, 6, 1, .45)
+  box(0, ROAD_BOT, COLS, 1, .42); box(0, ROAD_BOT + 1, COLS, 4, .22)
+  // the crosswalk, from the doors to the lot
+  for (let y = ROAD_TOP + 1; y < ROAD_BOT; y += 2) box(72, y, 26, 1, .7)
+}
+
+// --- in colour, over the ASCII ---
+function sky() {
+  lit(() => {
+    const s = ctx.createLinearGradient(0, 0, 0, ROAD_TOP * CELL)
+    s.addColorStop(0, "rgba(20,40,110,.35)"); s.addColorStop(.75, "rgba(40,70,140,.18)"); s.addColorStop(1, "rgba(255,140,60,.16)")
+    ctx.fillStyle = s; ctx.fillRect(0, 0, W, ROAD_TOP * CELL)
+  })
+}
+function store(t) {
+  const p = .85 + .15 * fm.pulseAt(t), seg = (108 - 54) / 3
+  // the roof: the logo's three tabs, teal, pink, orange, each a slab with a gap between
+  TABS.forEach((c, i) => {
+    const x0 = 54 + i * seg + (i ? .5 : 0), x1 = 54 + (i + 1) * seg - (i < 2 ? .5 : 0) + (i === 2 ? 2 : 0)
+    ctx.fillStyle = c; ctx.beginPath()
+    ctx.moveTo(x0 * CELL, roofY(x0) * CELL); ctx.lineTo(x1 * CELL, roofY(Math.min(x1, 108)) * CELL)
+    ctx.lineTo(x1 * CELL, (roofY(Math.min(x1, 108)) + 1.6) * CELL); ctx.lineTo(x0 * CELL, (roofY(x0) + 1.6) * CELL); ctx.closePath(); ctx.fill()
+  })
+  lit(() => {
+    TABS.forEach((c, i) => glow((54 + (i + .5) * seg) * CELL, (roofY(54 + (i + .5) * seg) + 3) * CELL, 260, 60, fm.rgba(c, .22 * p)))
+    glow(81 * CELL, 29 * CELL, 640, 70, `rgba(255,214,150,${.18 * p})`)                    // the glass band
+    glow(80 * CELL, 57 * CELL, 260, 90, "rgba(255,214,150,.28)")                           // the doors
+    glow(80 * CELL, 40 * CELL, 260, 110, "rgba(255,255,255,.08)")                          // the mark's wash on the stone
+    for (const [x, y] of [[8, 25], [151, 23]]) glow(x * CELL + 6, y * CELL, 90, 60, "rgba(255,236,190,.35)")
+  })
+  // banners on the lot lights: one tab colour each, the prompt on them
+  for (const [x, y] of [[8, 27], [151, 25]]) TABS.slice(0, 2).forEach((c, i) => {
+    const bx = x * CELL + (i ? 14 : -40), by = y * CELL, sway = Math.sin(TAU * t / LT * 4 + x + i) * 2
+    ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + 26, by); ctx.lineTo(bx + 26 + sway, by + 70); ctx.lineTo(bx + 13 + sway, by + 60); ctx.lineTo(bx + sway, by + 70); ctx.closePath(); ctx.fill()
+    ctx.fillStyle = "#0a0a0a"; ctx.font = `700 12px ${MONO}`; ctx.textAlign = "center"; ctx.fillText(">_", bx + 13 + sway / 2, by + 34)
+  })
+  ctx.save(); ctx.textBaseline = "alphabetic"
+  // the mark on the stone tower, lit from below like a sign
+  if (SIGN === "logo") {
+    const w = 250, h = w * 551.8 / 735.7
+    ctx.shadowColor = "rgba(255,255,255,.35)"; ctx.shadowBlur = 18 * p
+    if (LOGO.complete) ctx.drawImage(LOGO, 80 * CELL - w / 2, 33.4 * CELL, w, h)
+    ctx.shadowBlur = 0
+  } else { ctx.textAlign = "center"; ctx.font = '900 128px "Geist"'; ctx.fillStyle = "#fff"; ctx.fillText(SIGN, 80 * CELL, 46 * CELL) }
+  // the canopy over the doors: a dark sign under the three tabs, typing one phrase every 15 s
+  const cx0 = 57 * CELL, cw = 48 * CELL, cy = 49 * CELL
+  TABS.forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(cx0 + i * cw / 3, cy - 6, cw / 3 - (i < 2 ? 4 : 0), 6) })
+  ctx.fillStyle = "#0a0a0a"; ctx.fillRect(cx0, cy, cw, 40)
+  const slot = Math.floor((t % LT) / 15), local = (t % LT) % 15, phrase = CANOPY[slot % CANOPY.length]
+  const shown = phrase.slice(0, Math.floor(Math.min(1, local / 1.6) * phrase.length))
+  ctx.font = `700 22px ${MONO}`; ctx.letterSpacing = "3px"; ctx.textAlign = "left"
+  const tw = ctx.measureText(phrase).width, tx = 80 * CELL - (tw + 40) / 2
+  ctx.fillStyle = TABS[slot % 3]; ctx.fillText(">", tx, cy + 28)
+  ctx.shadowColor = "rgba(255,255,255,.5)"; ctx.shadowBlur = 10; ctx.fillStyle = "#fff"; ctx.fillText(shown, tx + 32, cy + 28); ctx.shadowBlur = 0
+  if (Math.floor(t * 2) % 2 === 0) { ctx.fillStyle = "#fff"; ctx.fillRect(tx + 34 + ctx.measureText(shown).width, cy + 29, 16, 4) }
+  // the left wing: the roundtable's line
+  ctx.letterSpacing = "0px"; ctx.textAlign = "left"; ctx.font = '900 38px "Geist"'
+  ctx.fillStyle = "#ffffff"; ctx.fillText("Every group.", 4 * CELL, 46.4 * CELL)
+  ctx.fillStyle = PINK; ctx.fillText("One room.", 4 * CELL + ctx.measureText("Every group. ").width, 46.4 * CELL)
+  // the right wing, on the canopy's fascia: the calendar's record
+  ctx.font = `700 18px ${MONO}`; ctx.letterSpacing = "3px"; ctx.fillStyle = "#fff"; ctx.textAlign = "left"
+  ctx.fillText("600+ EVENTS SINCE 2024", 110 * CELL, 50.6 * CELL)
+  TABS.forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(110 * CELL + ctx.measureText("600+ EVENTS SINCE 2024").width + 16 + i * 22, 50.6 * CELL - 12, 18, 6) })
+  ctx.restore()
+  board(t)
+}
+
+// the left block's windows: this week on the community calendar, from devsa.community (render.cjs passes it)
+function board(t) {
+  const x = 19 * CELL, y = 50 * CELL, w = 28 * CELL, h = 8.6 * CELL
+  ctx.save(); ctx.fillStyle = "rgba(8,8,10,.92)"; ctx.fillRect(x, y, w, h)
+  ctx.strokeStyle = "rgba(255,255,255,.18)"; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h)
+  ctx.font = `700 11px ${MONO}`; ctx.letterSpacing = "2px"; ctx.textAlign = "left"; ctx.fillStyle = TEAL; ctx.fillText("THIS WEEK ON THE CALENDAR", x + 12, y + 18)
+  const ev = (window.EVENTS || []).slice(0, 3)
+  ctx.letterSpacing = "0px"
+  if (!ev.length) { ctx.font = '500 15px "Geist"'; ctx.fillStyle = "#e5e5e5"; ctx.fillText("Every group, every event: devsa.community", x + 12, y + 50) }
+  ev.forEach((e, i) => {
+    const ly = y + 40 + i * 25
+    ctx.font = `700 10px ${MONO}`; ctx.fillStyle = TABS[i % 3]; ctx.fillText(e.day.split(" · ")[0], x + 12, ly)
+    ctx.font = '500 14px "Geist"'; ctx.fillStyle = "#f2f2f2"
+    let title = e.title; while (ctx.measureText(title).width > w - 120 && title.length > 4) title = title.slice(0, -2)
+    ctx.fillText(title === e.title ? title : title.trimEnd() + "…", x + 100, ly)
+  })
+  ctx.restore()
+}
+
+// --- the drive: two crossings of agents, cars in between --------------------------------------
+const CROSSINGS = [2, 32]            // seconds into each ~60 s cycle when a group leaves the doors
+const WALK_S = 10                    // how long a crossing takes
+const GROUP = [
+  { tint: TEAL, n: "07", dx: 0, lag: 0, basket: ["#7bd88f", ORANGE, "#ffd166"] },
+  { tint: PINK, n: "18", dx: 120, lag: 1.4, basket: ["#ff5a5a", "#7bd88f", "#f2e6bf"] },
+  { tint: ORANGE, n: "42", dx: 240, lag: .7, basket: ["#ffd166", "#ff8200", "#7bd88f"] },
+]
+const CARS = [[15.5, 1, "#121418"], [22.5, -1, "#1d2230"], [45.5, 1, "#2a1416"], [52.5, -1, "#121418"]]
+
+function basket(x, y, s, fruit, tint) {
+  // produce first, then the red basket in front of it, its handle over the top
+  fruit.forEach((c, i) => { ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x + (i - 1) * 13 * s, y - 6 * s - (i % 2) * 4 * s, 8 * s, 0, TAU); ctx.fill() })
+  ctx.fillStyle = "#0a0a0a"; ctx.beginPath(); ctx.roundRect(x + 6 * s, y - 26 * s, 20 * s, 16 * s, 3 * s); ctx.fill()   // a >_ sticker pack
+  ctx.fillStyle = "#fff"; ctx.font = `700 ${Math.round(8 * s)}px "Geist Mono"`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(">_", x + 16 * s, y - 18 * s)
+  ctx.fillStyle = tint; ctx.beginPath(); ctx.moveTo(x - 26 * s, y - 4 * s); ctx.lineTo(x + 26 * s, y - 4 * s); ctx.lineTo(x + 20 * s, y + 16 * s); ctx.lineTo(x - 20 * s, y + 16 * s); ctx.closePath(); ctx.fill()
+  ctx.strokeStyle = "rgba(0,0,0,.35)"; ctx.lineWidth = 1.5 * s
+  for (let k = -2; k <= 2; k++) { ctx.beginPath(); ctx.moveTo(x + k * 9 * s, y - 2 * s); ctx.lineTo(x + k * 7 * s, y + 14 * s); ctx.stroke() }
+  ctx.strokeStyle = tint; ctx.lineWidth = 3 * s; ctx.beginPath(); ctx.arc(x, y - 4 * s, 18 * s, Math.PI, TAU); ctx.stroke()
+}
+
+function shoppers(t) {
+  const c = t % LT, out = []
+  for (const at of CROSSINGS) for (const a of GROUP) {
+    const p = (c - at - a.lag) / WALK_S; if (p <= 0 || p >= 1) continue
+    const y = lerp(WALK * CELL - 6, ROAD_BOT * CELL + 70, p), s = lerp(1.05, 1.5, p)
+    out.push({ ...a, p, y, s, x: 76 * CELL + 40 + a.dx + Math.sin(p * 9 + a.dx) * 8 })
+  }
+  out.sort((a, b) => a.y - b.y)
+  for (const a of out) {
+    ctx.save(); ctx.globalAlpha = clamp01(a.p / .06) * clamp01((1 - a.p) / .1)
+    const head = drawPlush(ctx, { x: a.x, y: a.y, s: a.s, tint: a.tint, number: a.n, t, stride: TAU * 1.8 * t, run: 1, hold: true, look: 0, mouth: .4, seed: +a.n })
+    basket(a.x, head.bellyY + 6 * a.s, a.s, a.basket, TABS[(TABS.indexOf(a.tint) + 1) % 3])
+    ctx.restore()
+  }
+}
+function traffic(t) {
+  const c = t % LT
+  for (const [at, dir, body] of CARS) {
+    const p = (c - at) / 7; if (p <= 0 || p >= 1) continue
+    const x = dir > 0 ? lerp(-420, W + 420, p) : lerp(W + 420, -420, p)
+    car(x, dir > 0 ? 960 : 900, dir, body)
+  }
+}
+
+function render(t) {
+  paint(t)
+  fm.ascii("#0c0c0c")
+  sky(); store(t)
+  traffic(t)          // cars and people never share the crosswalk: the schedules don't overlap
+  shoppers(t)
+  footer(t)
+}
+fm.start(render, [logoReady])
+</script>
+</body>
+</html>

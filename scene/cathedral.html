@@ -1,0 +1,562 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: "Geist Mono"; font-weight: 700; src: url(fonts/GeistMono-Bold.woff2) format("woff2"); }
+  @font-face { font-family: "Geist"; font-weight: 500; src: url(fonts/Geist-Medium.woff2) format("woff2"); }
+  @font-face { font-family: "Geist"; font-weight: 900; src: url(fonts/Geist-Black.woff2) format("woff2"); }
+  html, body { margin: 0; background: #0c0c0c; overflow: hidden }
+  canvas { display: block }
+</style>
+</head>
+<body>
+<!--
+  DEVSA FM, the cathedral: San Fernando on Main Plaza at night, in the River Walk's ASCII style, with a
+  projection show on its face the way the plaza's light shows use the building. DEVSA's colours stay on
+  the building throughout (teal tower, pink gable, orange tower, the tabs' bars running down). Over them,
+  five films, 8 s each: the DEVSA mark, More Human Than Human (its HEAD film), PySanAntonio (the mascot),
+  Access Granted (the padlock), The Model (its node graph, the Claude Code mascots marching). After each
+  film, a run of logos, one at a time, large, with its name: all 31 community groups, then nine
+  partners. The loop is 180 s on stream (LOOP_SECONDS, set in stream.sh), about 3 s per logo. The films are frame sequences in proj/ (15 fps), so render(t) is exact.
+  The projection is added over the stone and tints the stone's characters, so the light lands on the
+  building; the doors and belfry openings stay dark. Agents cross the plaza, Linux San Antonio's penguin
+  rides by on a bicycle twice a minute, nothing else stands in the plaza: the projection is the show.
+  1920x1080, a seamless 60 s loop: render(t) draws a frame.
+-->
+<canvas id="c" width="1920" height="1080"></canvas>
+<script src="plush.js"></script>
+<script src="fmkit.js"></script>
+<script>
+const { W, H, TAU, CELL, COLS, ROWS, TEAL, PINK, ORANGE, ctx, g, LT, lerp, clamp01, ease, hash, glow, lit, hex, footer, loadImg } = fm
+const BRAND = [TEAL, PINK, ORANGE]
+
+// --- the building, traced from a straight-on photograph of the facade (Wikimedia Commons, "San Fernando
+// Cathedral.jpg"): the Gothic Revival front on Main Plaza. Coordinates below are the photo's, mapped into
+// the frame by F(); the facade keeps its real proportions.
+const GROUND = 905, S = .54
+const F = (x, y) => [960 + (x - 960) * S, GROUND - (1790 - y) * S]
+const fx = x => 960 + (x - 960) * S, fy = y => GROUND - (1790 - y) * S
+const MIRROR = x => 1920 - x
+// the towers' outer and inner edges, the top of the cornices, the centre's gable
+const LT0 = fx(205), LT1 = fx(700), RT0 = fx(1220), RT1 = fx(1715), TOP = fy(285)
+const PEAK = fy(705), SHOULDER = fy(790)
+const rectP = (p, x0, y0, x1, y1) => { const [a, b] = F(x0, y0), [c, d] = F(x1, y1); p.rect(a, b, c - a, d - b) }
+function facadePath() {
+  const p = new Path2D()
+  for (const m of [false, true]) {                 // the two towers, the right one mirrored
+    const X = x => (m ? MIRROR(x) : x)
+    const r = (x0, y0, x1, y1) => rectP(p, Math.min(X(x0), X(x1)), y0, Math.max(X(x0), X(x1)), y1)
+    r(205, 830, 700, 1790)                         // the lower tower, buttresses and all
+    r(315, 300, 712, 860)                          // the belfry stage
+    r(252, 285, 748, 335)                          // the cornice, overhanging
+  }
+  rectP(p, 690, 790, 1230, 1790)                   // the centre
+  const [ax, ay] = F(840, 900), [bx, by] = F(960, 705), [cx, cy] = F(1080, 900)
+  p.moveTo(ax, ay); p.lineTo(bx, by); p.lineTo(cx, cy); p.closePath()    // the gable
+  return p
+}
+const FACADE = facadePath()
+// a pointed (Gothic) arch, x y = top-left of its box (frame coordinates); and a round one
+function pointed(c, x, y, w, h) {
+  const r = w * .85
+  c.beginPath(); c.moveTo(x, y + h); c.lineTo(x, y + w * .55)
+  c.arc(x + r, y + w * .55, r, Math.PI, Math.PI + Math.acos((r - w / 2) / r), false)
+  c.arc(x + w - r, y + w * .55, r, -Math.acos((r - w / 2) / r), 0, false)
+  c.lineTo(x + w, y + h); c.closePath()
+}
+function rounded(c, x, y, w, h) { c.beginPath(); c.moveTo(x, y + h); c.lineTo(x, y + w / 2); c.arc(x + w / 2, y + w / 2, w / 2, Math.PI, 0); c.lineTo(x + w, y + h); c.closePath() }
+// openings, photo coordinates [x0, y0, x1, y1, shape]; the left tower's, mirrored for the right
+const SIDE = [
+  [418, 450, 470, 820, "round"], [508, 450, 560, 820, "round"],          // the belfry's twin louvered openings
+  [390, 1190, 425, 1360, "pointed"], [535, 1190, 570, 1360, "pointed"],  // the tower's two lancets
+  [425, 1495, 535, 1790, "pointed"],                                      // the tower door
+]
+const CENTRE = [
+  [890, 1495, 1030, 1790, "pointed"],                                     // the main door
+  [705, 1115, 740, 1300, "pointed"], [1180, 1115, 1215, 1300, "pointed"], // the centre's outer lancets
+  [875, 1185, 900, 1300, "pointed"], [1020, 1185, 1045, 1300, "pointed"], // and its inner ones
+  [940, 1150, 980, 1262, "round"],                                        // the statue's niche
+]
+const OPENINGS = [...SIDE, ...SIDE.map(([a, b, c, d, k]) => [MIRROR(c), b, MIRROR(a), d, k]), ...CENTRE]
+  .map(([x0, y0, x1, y1, k]) => { const [a, b] = F(x0, y0), [c, d] = F(x1, y1); return [a, b, c - a, d - b, k] })
+const shape = (c, [x, y, w, h, k]) => (k === "round" ? rounded : pointed)(c, x, y, w, h)
+const ROSE = [fx(960), fy(1050), 108 * S], OCULI = [[fx(480), fy(997)], [fx(1440), fy(997)]], OCULUS_R = 62 * S
+// where the community's logos go: across each tower's belfry pair, lit like signs
+const BELFRY = [[fx(400), fy(440), (578 - 400) * S, (820 - 440) * S], [fx(1342), fy(440), (1520 - 1342) * S, (820 - 440) * S]]
+
+function paint(t) {
+  g.setTransform(1 / CELL, 0, 0, 1 / CELL, 0, 0)
+  g.fillStyle = fm.gray(0); g.fillRect(0, 0, W, H)
+  let st = 9; const sr = () => (st = (st * 16807) % 2147483647) / 2147483647
+  for (let i = 0; i < 46; i++) { g.fillStyle = fm.gray(.25 + .25 * sr() + .12 * Math.sin(TAU * 3 * t / LT + i)); g.fillRect(sr() * W, sr() * 420, CELL, CELL) }
+  // the City's cloud icon, three of them drifting slowly across the upper sky
+  for (const [y, w, k, ph, v] of [[40, 260, 1, .1, .6], [150, 190, 2, .55, .48], [10, 150, 1, .8, .42]]) {
+    const x = ((t / LT) * k + ph) % 1 * (W + 600) - 300
+    g.setTransform(1, 0, 0, 1, 0, 0); fm.onGround("cloud", x / CELL, (y + w * .62) / CELL, w / CELL, v); g.setTransform(1 / CELL, 0, 0, 1 / CELL, 0, 0)   // icons are sized in cells
+  }
+  // Main Plaza's buildings either side, dim, a few windows lit (the tall one to the right, as in the photographs)
+  for (const [x0, x1, top] of [[330, 545, 560], [1375, 1520, 280], [1520, 1640, 520]]) {
+    g.fillStyle = fm.gray(.1); g.fillRect(x0, top, x1 - x0, GROUND - top)
+    for (let y = top + 16; y < GROUND - 20; y += 30) for (let x = x0 + 12; x < x1 - 12; x += 26) if (hash(x, y) > .72) { g.fillStyle = fm.gray(.34); g.fillRect(x, y, 12, 14) }
+  }
+  // the limestone: coursed blocks, joints staggered
+  g.save(); g.clip(FACADE)
+  for (let y = 0; y < GROUND; y += CELL) for (let x = 520; x < 1400; x += CELL) {
+    const course = Math.floor(y / (CELL * 2)), joint = ((x / CELL + (course % 2) * 2) % 5) === 0
+    g.fillStyle = fm.gray((y / CELL) % 2 === 0 ? .34 : joint ? .34 : .26 + .05 * hash(x, y)); g.fillRect(x, y, CELL, CELL)
+  }
+  g.restore()
+  const L = (x0, y0, x1, y1, v) => { const [a, b] = F(x0, y0), [c, d] = F(x1, y1); g.fillStyle = fm.gray(v); g.fillRect(a, b, c - a, d - b) }
+  for (const m of [false, true]) {
+    const X = x => (m ? MIRROR(x) : x), lr = (x0, y0, x1, y1, v) => L(Math.min(X(x0), X(x1)), y0, Math.max(X(x0), X(x1)), y1, v)
+    lr(252, 285, 748, 302, .14)                                        // the cornice's dark eave
+    for (let x = 262; x < 740; x += 22) lr(x, 305, x + 12, 330, .74)  // its dentils
+    lr(315, 335, 712, 345, .7)
+    const cx = X(527)                                                   // the iron cross on top
+    L(cx - 4, 160, cx + 4, 285, .78); L(cx - 42, 198, cx + 42, 206, .78)
+    lr(250, 700, 340, 1790, .58); lr(610, 700, 690, 1790, .58)         // the corner buttresses, full height
+    for (const [b0, b1] of [[250, 340], [610, 690]]) {                 // their gabled tops
+      const [a, y0] = F(X(b0), 760), [c] = F(X(b1), 760), [, yt] = F(0, 700)
+      g.fillStyle = fm.gray(.66); g.beginPath(); g.moveTo(a, y0); g.lineTo((a + c) / 2, yt); g.lineTo(c, y0); g.fill()
+    }
+    lr(340, 1128, 610, 1142, .62)                                      // the string course
+    lr(380, 382, 600, 396, .7)                                         // the hood over the belfry pair
+    const [h0, hy] = F(X(375), 1445), [h1] = F(X(590), 1445), [hx, ht] = F(X(482), 1310)   // the tower door's gabled hood
+    g.strokeStyle = fm.gray(.75); g.lineWidth = 8; g.beginPath(); g.moveTo(h0, hy); g.lineTo(hx, ht); g.lineTo(h1, hy); g.stroke()
+  }
+  // the centre: buttresses, the tracery band, the gable and its cross, the two spires
+  L(750, 790, 830, 1790, .58); L(1090, 790, 1170, 1790, .58)
+  L(690, 790, 1230, 805, .66)
+  for (let x = 700; x < 1220; x += 40) { const [a, b] = F(x, 820); pointed(g, a, b, 26 * S, 60 * S); g.fillStyle = fm.gray(.22); g.fill() }
+  { const [ax, ay] = F(840, 900), [bx, by] = F(960, 705), [cx, cy] = F(1080, 900)
+    g.strokeStyle = fm.gray(.78); g.lineWidth = 9; g.beginPath(); g.moveTo(ax, ay); g.lineTo(bx, by); g.lineTo(cx, cy); g.stroke() }
+  L(952, 630, 968, 705, .82); L(935, 650, 985, 664, .82)
+  for (const sx of [795, 1128]) {
+    L(sx - 18, 700, sx + 18, 1000, .6)
+    const [a, b] = F(sx - 18, 700), [c] = F(sx + 18, 700), [m, tp] = F(sx, 610)
+    g.fillStyle = fm.gray(.68); g.beginPath(); g.moveTo(a, b); g.lineTo(m, tp); g.lineTo(c, b); g.fill()
+  }
+  L(850, 1330, 1070, 1390, .5)                                                // the quatrefoil band over the main door
+  for (let x = 870; x < 1060; x += 48) { const [a, b] = F(x + 18, 1360); g.strokeStyle = fm.gray(.75); g.lineWidth = 4; g.beginPath(); g.arc(a, b, 11, 0, TAU); g.stroke() }
+  // the rose window under its pointed frame: rings and eight spokes
+  { const [x0, y0] = F(852, 925), [x1, y1] = F(1068, 1180); pointed(g, x0, y0, x1 - x0, y1 - y0); g.strokeStyle = fm.gray(.72); g.lineWidth = 8; g.stroke() }
+  g.fillStyle = fm.gray(.08); g.beginPath(); g.arc(ROSE[0], ROSE[1], ROSE[2], 0, TAU); g.fill()
+  g.strokeStyle = fm.gray(.82); g.lineWidth = 7; g.beginPath(); g.arc(ROSE[0], ROSE[1], ROSE[2], 0, TAU); g.stroke()
+  g.lineWidth = 4; for (let k = 0; k < 8; k++) { const a = k / 8 * TAU; g.beginPath(); g.moveTo(ROSE[0], ROSE[1]); g.lineTo(ROSE[0] + Math.cos(a) * ROSE[2], ROSE[1] + Math.sin(a) * ROSE[2]); g.stroke() }
+  g.beginPath(); g.arc(ROSE[0], ROSE[1], ROSE[2] * .3, 0, TAU); g.stroke()
+  // the oculi, louvered
+  for (const [ox, oy] of OCULI) {
+    g.strokeStyle = fm.gray(.8); g.lineWidth = 9; g.beginPath(); g.arc(ox, oy, OCULUS_R, 0, TAU); g.stroke()
+    g.fillStyle = fm.gray(.1); g.beginPath(); g.arc(ox, oy, OCULUS_R * .66, 0, TAU); g.fill()
+    g.fillStyle = fm.gray(.32); for (let y = -OCULUS_R * .5; y < OCULUS_R * .6; y += 7) g.fillRect(ox - OCULUS_R * .55, oy + y, OCULUS_R * 1.1, 2)
+  }
+  // openings: dark, framed; the belfry louvers striped; the doors' stained-glass tympana warm
+  for (const o of OPENINGS) {
+    const [x, y, w, h, k] = o
+    ;(k === "round" ? rounded : pointed)(g, x - 6, y - 6, w + 12, h + 6); g.fillStyle = fm.gray(.72); g.fill()
+    shape(g, o); g.fillStyle = fm.gray(.05); g.fill()
+    if (k === "round" && h > 100) { g.fillStyle = fm.gray(.28); for (let yy = y + w; yy < y + h - 4; yy += 8) g.fillRect(x + 2, yy, w - 4, 3) }
+    if (w > 50 && h > 140) { g.fillStyle = fm.gray(.42); g.fillRect(x + 4, y + w * .5, w - 8, h * .2) }
+  }
+  // the steps and the plaza
+  g.fillStyle = fm.gray(.55); g.fillRect(LT0 - 10, GROUND, RT1 - LT0 + 20, 10); g.fillStyle = fm.gray(.4); g.fillRect(LT0 - 30, GROUND + 12, RT1 - LT0 + 60, 10)
+  g.fillStyle = fm.gray(.12); g.fillRect(0, GROUND + 24, W, H - GROUND)
+  g.fillStyle = fm.gray(.24); for (let y = GROUND + 46; y < H; y += 30) g.fillRect(0, y, W, 6)
+  // the foreground: a low balustrade across the plaza, and tree canopies framing both sides
+  g.fillStyle = fm.gray(.62); g.fillRect(0, 932, W, 12); g.fillRect(0, 968, W, 10)
+  for (let x = 6; x < W; x += 26) { g.fillStyle = fm.gray(.5); g.fillRect(x, 944, 12, 24) }
+  for (const [cx, dir] of [[90, 1], [W - 90, -1]]) {
+    g.fillStyle = fm.gray(.34); g.fillRect(cx - 16, 520, 32, 420)
+    for (let k = 0; k < 70; k++) { const a = hash(k, cx) * TAU, r = 60 + 220 * hash(cx, k), x = cx + dir * 60 + Math.cos(a) * r, y = 380 + Math.sin(a) * r * .55
+      g.fillStyle = fm.gray(.26 + .2 * hash(k, 7)); g.beginPath(); g.arc(x, y, 34 + 30 * hash(k, 3), 0, TAU); g.fill() }
+  }
+  // two plaza lamps
+  for (const x of [330, 1560]) { g.fillStyle = fm.gray(.45); g.fillRect(x, 700, 10, GROUND - 676); g.fillStyle = fm.gray(1); g.fillRect(x - 10, 690, 30, 18) }
+  g.setTransform(1, 0, 0, 1, 0, 0)
+}
+
+// The architecture's lines, drawn crisp over the light, the way a building reads through a projection
+// mapping: eaves, belfry arches, oculi, the rose and its spokes, the gable, spires, doors, buttresses.
+function outline(c, a) {
+  c.save(); c.strokeStyle = `rgba(255,238,212,${a})`; c.lineWidth = 2.5; c.lineJoin = "round"
+  const P = (x, y) => F(x, y), seg = pts => { c.beginPath(); pts.forEach(([x, y], i) => { const [u, v] = P(x, y); i ? c.lineTo(u, v) : c.moveTo(u, v) }); c.stroke() }
+  for (const m of [false, true]) {
+    const X = x => (m ? MIRROR(x) : x)
+    seg([[X(252), 302], [X(300), 285], [X(700), 285], [X(748), 302], [X(748), 335], [X(252), 335], [X(252), 302]])   // the hipped eave
+    seg([[X(315), 345], [X(315), 860]]); seg([[X(712), 345], [X(712), 860]])
+    seg([[X(205), 860], [X(205), 1790]]); seg([[X(700), 860], [X(700), 1790]])
+    seg([[X(280), 860], [X(670), 860]])                                      // the belfry's sill
+    for (const [b0, b1] of [[250, 340], [610, 690]]) seg([[X(b0), 1790], [X(b0), 760], [X((b0 + b1) / 2), 700], [X(b1), 760], [X(b1), 1790]])
+    seg([[X(340), 1135], [X(610), 1135]])                                    // the string course
+    { const [x0, y0] = P(Math.min(X(385), X(593)), 400), [x1] = P(Math.max(X(385), X(593)), 400)       // the belfry's double arch
+      const r = (x1 - x0) / 4; c.beginPath(); c.arc(x0 + r, y0 + r, r, Math.PI, 0); c.arc(x1 - r, y0 + r, r, Math.PI, 0); c.stroke() }
+    seg([[X(375), 1445], [X(482), 1310], [X(590), 1445]])                    // the tower door's gabled hood
+  }
+  for (const [ox, oy] of OCULI) { c.beginPath(); c.arc(ox, oy, OCULUS_R, 0, TAU); c.stroke(); c.beginPath(); c.arc(ox, oy, OCULUS_R * .66, 0, TAU); c.stroke() }
+  seg([[840, 900], [960, 705], [1080, 900]]); seg([[960, 705], [960, 630]]); seg([[935, 657], [985, 657]])  // gable and its cross
+  for (const sx of [795, 1128]) seg([[sx - 18, 1000], [sx - 18, 700], [sx, 610], [sx + 18, 700], [sx + 18, 1000]])   // the spires
+  seg([[690, 790], [1230, 790]]); seg([[750, 1790], [750, 790]]); seg([[1170, 1790], [1170, 790]])
+  { const [x0, y0] = P(852, 925), [x1, y1] = P(1068, 1180); pointed(c, x0, y0, x1 - x0, y1 - y0); c.stroke() }
+  const [rx, ry, rr] = ROSE
+  c.beginPath(); c.arc(rx, ry, rr, 0, TAU); c.stroke(); c.beginPath(); c.arc(rx, ry, rr * .3, 0, TAU); c.stroke()
+  for (let k = 0; k < 8; k++) { const t = k / 8 * TAU; c.beginPath(); c.moveTo(rx + Math.cos(t) * rr * .3, ry + Math.sin(t) * rr * .3); c.lineTo(rx + Math.cos(t) * rr, ry + Math.sin(t) * rr); c.stroke() }
+  seg([[850, 1330], [1070, 1330]]); seg([[850, 1390], [1070, 1390]])
+  for (const o of OPENINGS) { const [x, y, w, h] = o; shape(c, [x - 5, y - 5, w + 10, h + 5, o[4]]); c.stroke() }
+  c.restore()
+}
+
+// --- the projection ---------------------------------------------------------------------------
+const pj = document.createElement("canvas"); pj.width = W; pj.height = H; const p = pj.getContext("2d")
+const small = document.createElement("canvas"); small.width = COLS; small.height = ROWS; const sp = small.getContext("2d", { willReadFrequently: true })
+const maskC = document.createElement("canvas"); maskC.width = COLS; maskC.height = ROWS
+{ const m = maskC.getContext("2d"); m.setTransform(1 / CELL, 0, 0, 1 / CELL, 0, 0); m.fillStyle = "#fff"; m.fill(FACADE) }
+const MASK = maskC.getContext("2d").getImageData(0, 0, COLS, ROWS).data
+
+const waits = []
+const img = src => { const [i, w] = loadImg(src); waits.push(w); return i }
+const seq = (dir, n) => Array.from({ length: n }, (_, k) => img(`proj/${dir}/${String(k + 1).padStart(3, "0")}.jpg`))
+const FILM = { mhth: seq("mhth", 188), pysa: seq("pysa", 107), ag: seq("ag", 128) }
+const frameOf = (film, sec) => film[Math.floor(sec * 15) % film.length]
+const MARK = img("devsa-alt-logo.svg")
+// [file, name], in the roundtable deck's order; AITX uses its square mark, as on the deck's nodes
+const GROUP_LIST = [["g0.png", "DEF CON Group SATX"], ["g1.png", "Alamo City AI"], ["g2.png", "ACM UTSA"], ["g3.png", "UTSA CyberJedis"],
+  ["g4.png", "Alamo Tech Collective"], ["g5.png", "ACM San Antonio"], ["g6.png", "Alamo Python"], ["g7.png", "Linux San Antonio"],
+  ["g8.png", "AWS User Group"], ["g9.png", "Greater Gaming Society"], ["g10.png", ".NET User Group"], ["g11.png", "Google Developer Group"],
+  ["g12.png", "Geeks && {...}"], ["g13.png", "SAHA"], ["g14-mark.png", "AITX"], ["g16.png", "Datanauts"], ["g17-2026.png", "Alamo City Locksport"],
+  ["g18.png", "OWASP San Antonio"], ["g19.png", "Alamo Regional Data Alliance"], ["g21.png", "Unreal Engine SA"], ["g22.png", "Red Hat User Group"],
+  ["g23.png", "UXSA"], ["g24.png", "Latinas in Tech"], ["g25.svg", "Alamo City Unity User Group"], ["sa-ruby-coders.png", "SA Ruby Coders"],
+  ["aws-sbg-wgu.png", "AWS Student Builder Group · WGU"], ["acm-tu.png", "ACM TU"], ["tech-study-buddy.png", "Tech Study Buddy"],
+  ["rowdycybercon.png", "RowdyCyberCon"], ["agentic-nights.png", "Agentic Nights"], ["wicys-utsa.png", "Women in Cybersecurity at UTSA"]]
+// the partners shown on the cathedral (a chosen nine, not every partner in the directory)
+const PARTNER_LIST = [["tvsa.png", "TVSA"], ["pytexas.png", "PyTexas Foundation"], ["bsides.png", "BSides San Antonio"], ["geekdom.svg", "Geekdom"],
+  ["learnopentech.svg", "learnOPENtech"], ["txlf.png", "Texas Linux Fest"], ["tech-bloc.svg", "Tech Bloc"], ["youth-code-jam.webp", "Youth Code Jam"],
+  ["the-creative-futures.webp", "The Creative Futures"]]
+// solid badges lose their shape as white light, so these project in their own colour
+const PARTNER_COLOUR = new Set(["txlf.png", "tech-bloc.svg", "sastw.svg"])
+const LOGOS = [...GROUP_LIST.map(([f, n]) => ({ im: img("proj/groups/" + f), name: n, kind: "group", white: false })),
+               ...PARTNER_LIST.map(([f, n]) => ({ im: img("proj/partners/" + f), name: n, kind: "partner", white: !PARTNER_COLOUR.has(f) }))]
+// The Model's mascot: the Claude Code mark, as The Model's site draws it
+const CLAUDE = new Path2D("M20.998 10.949H24v3.102h-3v3.028h-1.487V20H18v-2.921h-1.487V20H15v-2.921H9V20H7.488v-2.921H6V20H4.487v-2.921H3V14.05H0V10.95h3V5h17.998v5.949zM6 10.949h1.488V8.102H6v2.847zm10.51 0H18V8.102h-1.49v2.847z")
+const LAVENDER = "#c4b5fd"
+
+// places on the stone a logo can sit: the tower faces and the centre, avoiding the openings
+const SPOTS = (() => {
+  const s = []
+  for (const x0 of [LT0, RT0]) for (const y of [415, 478, 630, 776]) for (const dx of [40, 116, 192]) s.push([x0 + dx, y])
+  for (const y of [610, 760]) for (const x of [760, 840, 1080, 1160]) s.push([x, y])
+  for (const x of [800, 880, 1040, 1120]) s.push([x, 360])
+  return s
+})()
+
+function film(frames, sec, x, y, w, tint) {
+  const f = frameOf(frames, sec); if (!f.complete || !f.width) return
+  const h = w * f.height / f.width
+  p.save(); p.globalCompositeOperation = "lighter"; p.drawImage(f, x - w / 2, y - h / 2, w, h)
+  if (tint) { p.globalCompositeOperation = "multiply"; p.fillStyle = tint; p.fillRect(x - w / 2, y - h / 2, w, h) }
+  p.restore()
+}
+function disc(im, x, y, r, a) {
+  p.save(); p.globalAlpha = a; p.fillStyle = "#121216"; p.beginPath(); p.arc(x, y, r, 0, TAU); p.fill()
+  p.strokeStyle = "rgba(255,255,255,.35)"; p.lineWidth = 2; p.stroke()
+  if (im.complete && im.width) { const s = r * 1.45, k = Math.min(s / im.width, s / im.height); p.drawImage(im, x - im.width * k / 2, y - im.height * k / 2, im.width * k, im.height * k) }
+  p.restore()
+}
+function card(im, x, y, w, h, a) {
+  p.save(); p.globalAlpha = a; p.fillStyle = "#f4f4f5"; p.beginPath(); p.roundRect(x - w / 2, y - h / 2, w, h, 10); p.fill()
+  if (im.complete && im.width) { const k = Math.min((w - 20) / im.width, (h - 16) / im.height); p.drawImage(im, x - im.width * k / 2, y - im.height * k / 2, im.width * k, im.height * k) }
+  p.restore()
+}
+
+// --- the light, locked to the stone (after the Saga's way of mapping San Fernando): a grid on each tower
+// face that follows the coursing, chevrons down the buttresses, the rose window and the oculi lit on the beat.
+// DEVSA's colours stay on the building: the left tower teal, the right orange, the gable pink.
+const BUTTRESSES = [[250, 340], [610, 690], [1230, 1310], [1580, 1670], [750, 830], [1090, 1170]]
+  .map(([a, b]) => [fx(a), fx(b)])
+function stonePatterns(sec, k) {                          // k: 0..1, how hard the building is playing
+  const beat = fm.pulseAt(sec)
+  p.save(); p.clip(FACADE)
+  // the tower faces: a soft field of their colour, then the coursing as a grid, light climbing it
+  for (const [x0, x1, col] of [[LT0, LT1, TEAL], [RT0, RT1, ORANGE]]) {
+    p.globalAlpha = (.16 + .1 * beat) * (.6 + .4 * k); p.fillStyle = col; p.fillRect(x0, TOP - 40, x1 - x0, GROUND - TOP + 40)
+    p.strokeStyle = col; p.lineWidth = 2
+    for (let y = Math.ceil((TOP - 40) / 24) * 24, row = 0; y < GROUND; y += 24, row++) {
+      const a = (.18 + .7 * Math.max(0, Math.sin(y / 70 + sec * 2.4))) * (.45 + .55 * k)
+      p.globalAlpha = a; p.beginPath(); p.moveTo(x0, y); p.lineTo(x1, y); p.stroke()
+      for (let x = x0 + (row % 2) * 30; x < x1; x += 60) { p.beginPath(); p.moveTo(x, y); p.lineTo(x, y + 24); p.stroke() }
+    }
+  }
+  // the gable, pink
+  p.globalAlpha = (.22 + .12 * beat) * (.6 + .4 * k); p.fillStyle = PINK
+  p.beginPath(); p.moveTo(LT1, GROUND); p.lineTo(LT1, SHOULDER); p.lineTo(960, PEAK); p.lineTo(RT0, SHOULDER); p.lineTo(RT0, GROUND); p.fill()
+  // chevrons running down every buttress
+  p.lineWidth = 5; p.lineJoin = "miter"
+  for (const [bx0, bx1] of BUTTRESSES) {
+    const top = fy(760), mid = (bx0 + bx1) / 2, off = (sec * 46) % 28
+    for (let y = top - 28 + off, i = 0; y < GROUND; y += 28, i++) {
+      const band = Math.floor((y - off) / 28 + 999) % 3
+      p.globalAlpha = (.35 + .45 * k) * (.7 + .3 * beat); p.strokeStyle = [PINK, ORANGE, TEAL][band]
+      p.beginPath(); p.moveTo(bx0, y); p.lineTo(mid, y + 13); p.lineTo(bx1, y); p.stroke()
+    }
+  }
+  // the rose window, turning slowly, flaring on the beat; the oculi answer it off the beat
+  const [rx, ry, rr] = ROSE, rot = sec * .35
+  p.globalAlpha = .35 + .65 * beat; p.strokeStyle = beat > .5 ? PINK : "#f4efe6"; p.lineWidth = 6
+  p.beginPath(); p.arc(rx, ry, rr, 0, TAU); p.stroke(); p.beginPath(); p.arc(rx, ry, rr * .3, 0, TAU); p.stroke()
+  for (let i = 0; i < 8; i++) { const a = rot + i / 8 * TAU; p.beginPath(); p.moveTo(rx + Math.cos(a) * rr * .3, ry + Math.sin(a) * rr * .3); p.lineTo(rx + Math.cos(a) * rr, ry + Math.sin(a) * rr); p.stroke() }
+  const off = fm.pulseAt(sec + .3)
+  OCULI.forEach(([ox, oy], i) => { p.globalAlpha = .3 + .6 * off; p.strokeStyle = i ? ORANGE : TEAL; p.lineWidth = 7; p.beginPath(); p.arc(ox, oy, OCULUS_R, 0, TAU); p.stroke() })
+  p.restore()
+}
+
+// --- the sweeps: fields of hatched strokes, drawn as characters (/ \ | -), flowing in arcs around the main
+// door's arch and on the diagonal across the towers. They wash over the whole facade between films.
+const DOOR_C = [960, fy(1495)]
+const SWEEP_CELLS = (() => {                              // every character cell on the facade, with its stroke
+  const out = []
+  for (let cy = Math.floor((TOP - 30) / CELL); cy < GROUND / CELL; cy++) for (let cx = Math.floor(LT0 / CELL); cx <= RT1 / CELL; cx++) {
+    if (!MASK[(cy * COLS + cx) * 4 + 3]) continue
+    const x = cx * CELL + CELL / 2, y = cy * CELL + CELL / 2, dx = x - DOOR_C[0], dy = y - DOOR_C[1], r = Math.hypot(dx, dy)
+    const n = Math.sin(x * .013 + y * .021) + Math.sin(x * .031 - y * .017)
+    const w = clamp01((r - 250) / 130)                    // arcs near the door, diagonals out on the towers
+    let ang = w < .5 ? Math.atan2(dy, dx) + Math.PI / 2 : (x < 960 ? -1 : 1) * Math.PI / 3 + .25 * n
+    ang = ((ang % Math.PI) + Math.PI) % Math.PI
+    const ch = ang < Math.PI / 8 || ang > 7 * Math.PI / 8 ? "-" : ang < 3 * Math.PI / 8 ? "\\" : ang < 5 * Math.PI / 8 ? "|" : "/"
+    const d = w < .5 ? r : (x * Math.cos(ang + Math.PI / 2) + y * Math.sin(ang + Math.PI / 2))
+    out.push({ x, y, ch, d, n, u: (x - LT0) / (RT1 - LT0) })
+  }
+  return out
+})()
+const SWEEP_COL = [TEAL, "#eef7f6", PINK]
+let SWEEP = null                                          // set by projection(), drawn by render() over the frame
+function sweep(c2, sec, amount, front, avoidArch) {      // front: how far the wash has come across, 0..1.3
+  if (amount <= .01) return
+  const p = c2
+  p.save(); p.font = `700 ${CELL + 3}px "Geist Mono"`; p.textAlign = "center"; p.textBaseline = "middle"
+  for (const c of SWEEP_CELLS) {
+    if (c.u + .18 * c.n > front) continue
+    if (avoidArch && p.isPointInPath(ARCH, c.x, c.y)) continue
+    const ph = c.d * .16 - sec * 4 + c.n * .45, v = Math.sin(ph)
+    if (v < .55) continue
+    p.globalAlpha = Math.min(.7, amount * .8); p.fillStyle = "#0c0c0c"; p.fillRect(c.x - CELL / 2, c.y - CELL / 2, CELL, CELL)
+    p.globalAlpha = amount * (.55 + .45 * v); p.fillStyle = SWEEP_COL[Math.floor(ph / TAU + c.n * .3 + 999) % 3]
+    p.fillText(c.ch, c.x, c.y)
+  }
+  p.restore()
+}
+
+// --- the frame: each film plays inside a great pointed arch over the main door, echoing the doors below
+const ARCH_BOX = [fx(610), fy(820), fx(1310) - fx(610), GROUND - fy(820)]
+const ARCH = (() => { const [x, y, w, h] = ARCH_BOX, r = w * .85, c = new Path2D()
+  c.moveTo(x, y + h); c.lineTo(x, y + w * .55)
+  c.arc(x + r, y + w * .55, r, Math.PI, Math.PI + Math.acos((r - w / 2) / r), false)
+  c.arc(x + w - r, y + w * .55, r, -Math.acos((r - w / 2) / r), 0, false); c.lineTo(x + w, y + h); c.closePath(); return c })()
+const ARCH_CY = ARCH_BOX[1] + ARCH_BOX[3] * .5
+function cover(frames, sec, cx, zoom = 1) {             // a film, sized to fill the arch's height, cropped by it
+  const f = frameOf(frames, sec); if (!f.complete || !f.width) return
+  const h = ARCH_BOX[3] * zoom, w = h * f.width / f.height
+  p.save(); p.globalCompositeOperation = "lighter"; p.drawImage(f, cx - w / 2, ARCH_CY - h / 2, w, h); p.restore()
+}
+
+// The films are the show, each inside the arch. The DEVSA mark opens the loop, thrown large.
+const FILMS = [
+  { len: 20, framed: false, draw: (u, sec) => { if (MARK.complete) { const w = 400 * (.92 + .08 * ease(u * 3)), h = w * 551.8 / 735.7; p.save(); p.globalCompositeOperation = "lighter"; p.drawImage(MARK, 960 - w / 2, 600 - h / 2, w, h); p.restore(); MARK_AT = [960 - w / 2, 600 - h / 2, w, h] } } },
+  { len: 40, draw: (u, sec) => {                         // More Human Than Human: thin gold lines, so brighter, and glowing
+    p.save(); p.globalAlpha *= .45; p.filter = "blur(8px) brightness(1.6)"; cover(FILM.mhth, sec, 960); p.restore()
+    p.save(); p.filter = "brightness(1.7) saturate(1.1)"; cover(FILM.mhth, sec, 960); p.restore()
+  } },
+  { len: 40, draw: (u, sec) => cover(FILM.pysa, sec, 960) },
+  { len: 40, draw: (u, sec) => cover(FILM.ag, sec, 834) },
+  { len: 40, draw: (u, sec) => {                         // The Model: its Claude Code mascot walking; a line marching beneath
+    const step = Math.sin(sec * 7), bob = Math.abs(step) * -10
+    p.save(); p.shadowColor = LAVENDER; p.shadowBlur = 18; p.fillStyle = LAVENDER; p.globalAlpha = .8
+    p.translate(960, 600 + bob); p.rotate(step * .04); p.scale(10, 10); p.translate(-12, -12.5); p.fill(CLAUDE, "evenodd"); p.restore()
+    p.save(); p.fillStyle = LAVENDER; p.globalAlpha = .6
+    for (let i = 0; i < 5; i++) { const x = ((sec * 50 + i * 90) % 450) + 735, y = 850 - Math.abs(Math.sin(sec * 8 + i)) * 6
+      p.save(); p.translate(x, y); p.scale(2.4, 2.4); p.translate(-12, -12.5); p.fill(CLAUDE, "evenodd"); p.restore() }
+    p.restore()
+  } },
+]
+// The community, on the towers: the groups one at a time on the left tower, the partners on the right,
+// each in its own colours in a soft pool of shadow (no border, no label), turning over through the loop.
+// The community, in the belfries: the groups one at a time in the left tower's, the partners in the right's,
+// lit like signs in the dark openings. No border, no label; they turn over through the loop.
+function belfryLogo(L, cx, cy, a) {
+  const im = L.im; if (a <= 0 || !im.complete || !im.width) return
+  ctx.save(); ctx.globalAlpha = a
+  const k = Math.min(104 / im.width, 120 / im.height)
+  ctx.shadowColor = "rgba(255,255,255,.35)"; ctx.shadowBlur = 18
+  ctx.drawImage(im, cx - im.width * k / 2, cy - im.height * k / 2, im.width * k, im.height * k)
+  ctx.restore()
+}
+// Groups and partners together, shuffled once (seeded, so the order is the same every run), shown two
+// at a time, one in each belfry. Every logo gets the same time; the whole list runs twice per loop.
+const ROLL = (() => {
+  const o = LOGOS.slice(); let sd = 2101
+  const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647
+  for (let i = o.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [o[i], o[j]] = [o[j], o[i]] }
+  return o
+})()
+function community(t) {
+  const c = t % fm.T, pairs = Math.ceil(ROLL.length / 2), each = fm.T / (pairs * 2)
+  const k = Math.floor(c / each), local = c - k * each, pair = k % pairs
+  const a = clamp01(local / .7) * clamp01((each - local) / .7)
+  BELFRY.forEach(([bx, by, bw, bh], side) => { const L = ROLL[(pair * 2 + side) % ROLL.length]; belfryLogo(L, bx + bw / 2, by + bh * .5, a) })
+}
+const FADE_S = 1.2
+const SCHEDULE = (() => {                                 // the films fill the loop, stretched or squeezed to its length
+  const total = FILMS.reduce((n, f) => n + f.len, 0), k = fm.T / total
+  let at = 0; return FILMS.map(f => { const s = { at, len: f.len * k, draw: f.draw, framed: f.framed }; at += f.len * k; return s })
+})()
+
+function projection(t) {
+  const c = t % fm.T
+  p.clearRect(0, 0, W, H); p.fillStyle = "#000"; p.fillRect(0, 0, W, H)
+  const i = SCHEDULE.findIndex(s => c >= s.at && c < s.at + s.len), s = SCHEDULE[Math.max(0, i)], local = c - s.at
+  // each segment: the whole building plays, the film arrives in the arch, a sweep carries it away
+  const INTRO = 4.5, OUT = 1.8
+  const filmIn = clamp01((local - INTRO + .8) / 1.4), filmOut = clamp01((s.len - local) / OUT), filmA = filmIn * filmOut
+  const play = 1 - filmA * .55                                            // the building quietens under a film
+  stonePatterns(c, play)
+  const inFront = ease(clamp01(local / 2.2)) * 1.35                        // the wash arriving from the left
+  const outFront = ease(clamp01((local - (s.len - OUT)) / OUT)) * 1.35    // and the one that clears the film
+  const wash = local < INTRO + .8 ? 1 - clamp01((local - INTRO + .2) / 1.2) * .8 : local > s.len - OUT ? 1 : .2
+  SWEEP = [c, wash, local > s.len - OUT ? outFront : Math.max(inFront, local > INTRO ? 1.35 : 0), filmA > .05 && s.framed !== false]
+  if (filmA > 0) {
+    p.save(); p.globalAlpha = filmA
+    if (s.framed !== false) {
+      p.fillStyle = "#000"; p.fill(ARCH); p.clip(ARCH)                    // the arch goes dark, then the film fills it
+      s.draw(local / s.len, local); p.restore()
+      p.save(); p.globalAlpha = filmA * (.55 + .35 * fm.pulseAt(c)); p.strokeStyle = "#f4efe6"; p.lineWidth = 4; p.stroke(ARCH)   // its edge, lit
+    } else s.draw(local / s.len, local)
+    p.restore()
+  }
+  sp.clearRect(0, 0, COLS, ROWS); sp.drawImage(pj, 0, 0, COLS, ROWS)
+  return sp.getImageData(0, 0, COLS, ROWS).data
+}
+
+// --- the sky: a slow searchlight from each tower, teal and orange, swinging out and crossing
+function beams(t) {
+  const swing = Math.sin(TAU * t / LT), lift = .85 + .3 * fm.pulseAt(t)
+  for (const [x, c, side] of [[(LT0 + LT1) / 2, TEAL, -1], [(RT0 + RT1) / 2, ORANGE, 1]]) {
+    const a = -Math.PI / 2 + side * (.62 + .3 * swing), len = 1300, spread = .11
+    ctx.save(); ctx.globalCompositeOperation = "lighter"
+    const gr = ctx.createLinearGradient(x, TOP, x + Math.cos(a) * len, TOP + Math.sin(a) * len)
+    gr.addColorStop(0, fm.rgba(c, .42 * lift)); gr.addColorStop(1, fm.rgba(c, 0))
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.moveTo(x - 8, TOP - 90)
+    ctx.lineTo(x + Math.cos(a - spread) * len, TOP + Math.sin(a - spread) * len); ctx.lineTo(x + Math.cos(a + spread) * len, TOP + Math.sin(a + spread) * len)
+    ctx.lineTo(x + 8, TOP - 90); ctx.fill(); ctx.restore()
+  }
+}
+
+// --- the plaza's people -------------------------------------------------------------------------
+const PENGUIN = img("penguin.png"), PYSA = img("pysa-mascot-full.webp")
+// agents: [tint, number, crossings per minute, phase, direction]
+const WALKERS = [[TEAL, "07", 1, .1, 1], [ORANGE, "42", 1, .6, -1]]   // two, slow: the projection is the show
+function walkers(t) {
+  for (const [tint, n, k, ph, dir] of WALKERS) {
+    const u = ((t / LT) * k + ph) % 1, span = W + 300
+    const x = dir > 0 ? -150 + u * span : W + 150 - u * span
+    drawPlush(ctx, { x, y: 1000, s: 1.05, tint, number: "", t, stride: TAU * 1.8 * t, run: 1, look: dir * 4, mouth: .25, seed: +n })
+  }
+}
+// The audience: agents in folding chairs on the plaza, backs to us, watching the show, as people do on Main
+// Plaza. They nod to the beat and throw their arms up when a new film starts. The centre stays clear.
+// [x, tint or null for an empty chair, seed]
+const SEATS = [[330, TEAL, 3], [455, null, 0], [580, PINK, 11], [1340, ORANGE, 5], [1465, null, 0], [1590, TEAL, 8]]
+const SEAT_Y = 948
+function chair(x, front) {                                         // a folding chair from behind
+  const y = SEAT_Y, c = "#2b2b2e", edge = "rgba(225,220,210,.42)"
+  ctx.save(); ctx.lineCap = "round"
+  if (!front) {                                                    // legs and seat, behind whoever sits there
+    ctx.strokeStyle = c; ctx.lineWidth = 6
+    for (const d of [-1, 1]) { ctx.beginPath(); ctx.moveTo(x + d * 30, y - 4); ctx.lineTo(x + d * 36, y + 58); ctx.stroke()
+      ctx.beginPath(); ctx.moveTo(x + d * 24, y + 2); ctx.lineTo(x + d * 18, y + 56); ctx.stroke() }
+    ctx.fillStyle = c; ctx.fillRect(x - 34, y - 6, 68, 9)
+  } else {                                                         // the backrest, in front of them
+    ctx.strokeStyle = c; ctx.lineWidth = 6
+    for (const d of [-1, 1]) { ctx.beginPath(); ctx.moveTo(x + d * 32, y + 4); ctx.lineTo(x + d * 32, y - 62); ctx.stroke() }
+    ctx.fillStyle = c; ctx.beginPath(); ctx.roundRect(x - 34, y - 62, 68, 18, 3); ctx.fill(); ctx.fillRect(x - 32, y - 34, 64, 8)
+    ctx.strokeStyle = edge; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x - 32, y - 61); ctx.lineTo(x + 32, y - 61); ctx.stroke()   // catching the light
+  }
+  ctx.restore()
+}
+function audience(t) {
+  const c = t % fm.T, beat = fm.pulseAt(t)
+  const since = Math.min(...SCHEDULE.map(s => (c - s.at + fm.T) % fm.T))             // seconds since a film began
+  for (const [x, tint, seed] of SEATS) {
+    chair(x, false)
+    if (tint) {
+      const cheer = since < 2.4 && seed % 2 === 1, hop = cheer ? Math.abs(Math.sin(t * 9)) * 7 : 0
+      drawPlush(ctx, { x, y: SEAT_Y + 17, s: 1, tint, number: "", t, back: true, seed, armsUp: cheer,
+        lean: .05 * Math.sin(TAU * t / 3.2 + seed), liftPx: 2.5 * beat + hop })
+    }
+    chair(x, true)
+  }
+}
+function bicycle(t) {
+  const cyc = (t % (LT / 2)), p01 = cyc / 7; if (p01 <= 0 || p01 >= 1) return            // across in 7 s, twice a minute
+  const x = lerp(-260, W + 260, p01), y = 918, R = 46, spin = t * 14
+  ctx.save(); ctx.strokeStyle = "#e5e5e5"; ctx.lineWidth = 5
+  for (const wx of [x - 70, x + 70]) {
+    ctx.beginPath(); ctx.arc(wx, y - R, R, 0, TAU); ctx.stroke()
+    ctx.lineWidth = 2; for (let k = 0; k < 6; k++) { const a = spin + k * Math.PI / 3; ctx.beginPath(); ctx.moveTo(wx, y - R); ctx.lineTo(wx + Math.cos(a) * R, y - R + Math.sin(a) * R); ctx.stroke() } ctx.lineWidth = 5
+  }
+  ctx.strokeStyle = TEAL; ctx.lineWidth = 7; ctx.lineJoin = "round"; ctx.beginPath()
+  ctx.moveTo(x - 70, y - R); ctx.lineTo(x - 10, y - R); ctx.lineTo(x + 30, y - R - 52); ctx.lineTo(x - 30, y - R - 52); ctx.lineTo(x - 10, y - R); ctx.moveTo(x + 30, y - R - 52); ctx.lineTo(x + 70, y - R); ctx.moveTo(x + 30, y - R - 52); ctx.lineTo(x + 44, y - R - 78); ctx.stroke()
+  ctx.strokeStyle = "#e5e5e5"; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(x + 34, y - R - 80); ctx.lineTo(x + 58, y - R - 84); ctx.stroke()   // the handlebar
+  ctx.fillStyle = "#1a1a1a"; ctx.fillRect(x - 46, y - R - 60, 36, 9)                                                                             // the seat
+  if (PENGUIN.complete && PENGUIN.width) { const h = 118, w = h * PENGUIN.width / PENGUIN.height, bob = Math.sin(spin) * 2
+    ctx.imageSmoothingEnabled = false; ctx.drawImage(PENGUIN, x - 28 - w / 2, y - R - 54 - h + bob, w, h); ctx.imageSmoothingEnabled = true }
+  ctx.restore()
+}
+// Linux San Antonio's penguin, standing on the left, nodding a little to the music
+function penguin(t) {
+  if (!PENGUIN.complete || !PENGUIN.width) return
+  const h = 140, w = h * PENGUIN.width / PENGUIN.height, nod = (.5 - .5 * Math.cos(TAU * t / LT * 38)) * 3
+  ctx.save(); ctx.translate(250, 998); ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.beginPath(); ctx.ellipse(0, 0, w * .4, 8, 0, 0, TAU); ctx.fill()
+  ctx.imageSmoothingEnabled = false; ctx.drawImage(PENGUIN, -w / 2, -h + nod, w, h); ctx.imageSmoothingEnabled = true; ctx.restore()
+}
+function mascot(t) {
+  if (!PYSA.complete || !PYSA.width) return
+  const h = 190, w = h * PYSA.width / PYSA.height, sway = Math.sin(TAU * t / LT * 30) * 1.5   // the agents' and the penguin's height
+  ctx.save(); ctx.translate(1700, 998); ctx.rotate(sway * .004); ctx.drawImage(PYSA, -w / 2, -h, w, h); ctx.restore()
+}
+
+let MARK_AT = null
+function render(t) {
+  paint(t)
+  const PJ = projection(t)
+  fm.ascii("#0c0c0c", (x, y) => {                          // the stone's characters take the light
+    const i = (y * COLS + x) * 4; if (!MASK[i + 3]) return null
+    const r = PJ[i], gg = PJ[i + 1], b = PJ[i + 2], v = Math.max(r, gg, b) / 255
+    return v > .05 ? [Math.min(255, r * 1.25 + 30), Math.min(255, gg * 1.25 + 30), Math.min(255, b * 1.25 + 30), .4 + .55 * v] : null
+  })
+  ctx.save(); ctx.clip(FACADE); ctx.globalCompositeOperation = "screen"; ctx.globalAlpha = .82; ctx.drawImage(pj, 0, 0); ctx.restore()
+  if (SWEEP) sweep(ctx, ...SWEEP)                          // the hatched strokes, as characters on the frame
+  ctx.fillStyle = "rgba(12,12,12,.5)"; for (const o of OPENINGS) { shape(ctx, o); ctx.fill() }
+  // the DEVSA mark, thrown as light: screen-blended so its black body vanishes and only the light lands on
+  // the stone, with a projector's flicker and scanlines; the windows can't notch it, the stone's lines show through
+  if (MARK_AT) {
+    const [mx, my, mw, mh] = MARK_AT
+    ctx.save(); ctx.globalCompositeOperation = "screen"; ctx.globalAlpha = .62 + .06 * Math.sin(t * 37) * Math.sin(t * 11)
+    ctx.drawImage(MARK, mx, my, mw, mh)
+    ctx.filter = "blur(16px)"; ctx.globalAlpha *= .7; ctx.drawImage(MARK, mx, my, mw, mh); ctx.filter = "none"   // the throw's halo
+    ctx.globalCompositeOperation = "multiply"; ctx.globalAlpha = 1; ctx.fillStyle = "rgba(170,165,160,1)"
+    for (let y = my; y < my + mh; y += 4) ctx.fillRect(mx, y, mw, 1.4)
+    ctx.restore(); MARK_AT = null
+  }
+  outline(ctx, .3)
+  lit(() => {
+    for (const x of [330, 1560]) glow(x + 5, 698, 120, 90, "rgba(255,230,180,.4)")
+    const k = (60 * COLS + 80) * 4; glow(960, GROUND + 50, 760, 90, `rgba(${PJ[k]},${PJ[k + 1]},${PJ[k + 2]},.4)`)   // spill on the plaza
+  })
+  // community(t) — the belfry logos, retired: they pulled the eye off the films
+  bicycle(t)
+  audience(t)                                   // walkers(t) retired: the agents sit and watch now
+  footer(t)
+}
+fm.start(render, [...waits, fm.loadIcons(["cloud"]), document.fonts.load('900 40px "Geist"')])
+</script>
+</body>
+</html>

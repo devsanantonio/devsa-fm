@@ -1,0 +1,483 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: "Geist Mono"; font-weight: 700; src: url(fonts/GeistMono-Bold.woff2) format("woff2"); }
+  @font-face { font-family: "Geist"; font-weight: 500; src: url(fonts/Geist-Medium.woff2) format("woff2"); }
+  html, body { margin: 0; background: #0c0c0c; overflow: hidden }
+  canvas { display: block }
+</style>
+</head>
+<body>
+<!--
+  DEVSA FM, the taco truck: midnight downtown, in the River Walk's night style (light
+  characters on near-black). The Alamo Python food truck is parked at the curb, its window lit,
+  string lights on the roof, the City of San Antonio's taco and concha icons chalked on its menu
+  board. At a folding table on the sidewalk, Linux San Antonio's penguin is on a laptop,
+  shipping something; the Tower of the Americas behind, a cactus by the curb.
+  1920x1080, a seamless T-second loop: render(t) draws a frame.
+-->
+<canvas id="c" width="1920" height="1080"></canvas>
+<script src="plush.js"></script>
+<script>
+// synced (render.cjs SYNC=...): the loop is the song, with the song inside it. One feature gets
+// shipped per song (a new localhost:210 starter for the City's 311 data), from the first branch
+// to "shipped" as the song ends; the string lights pulse on
+// its real beat. The scenery's own motions run on a ~60 s cycle, a whole number per loop (LT).
+const B = window.BEATS || null
+const T = window.LOOP_T || 60, W = 1920, H = 1080, TAU = Math.PI * 2
+const LT = T / Math.max(1, Math.round(T / 60))
+const TEAL = "#00b2a9", PINK = "#ef426f", ORANGE = "#ff8200"
+const BPM = B ? B.bpm : 76, OFFSET = B ? B.offset : 0
+const beatPh = t => { const bc = (t - OFFSET) * BPM / 60; return bc - Math.floor(bc) }
+const pulseAt = t => Math.exp(-beatPh(t) * 3.5)
+const lerp = (a, b, p) => a + (b - a) * p
+const clamp01 = p => Math.max(0, Math.min(1, p))
+const ease = p => { p = clamp01(p); return p * p * (3 - 2 * p) }
+const span = (c, a, b) => clamp01((c - a) / (b - a))
+const ctx = document.getElementById("c").getContext("2d")
+const CELL = 12, COLS = W / CELL, ROWS = H / CELL      // 160 x 90 characters
+const RAMP = " .,:;-=+*#%@"
+
+const sc = document.createElement("canvas"); sc.width = COLS; sc.height = ROWS
+const g = sc.getContext("2d", { willReadFrequently: true })
+const gray = v => { const c = Math.round(Math.max(0, Math.min(1, v)) * 255); return `rgb(${c},${c},${c})` }
+function box(x, y, w, h, v) { g.fillStyle = gray(v); g.fillRect(x, y, w, h) }
+const hash = (a, b) => { const s = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return s - Math.floor(s) }
+
+// City of San Antonio icons: inked into the ASCII scene (tower, cactus), or chalked onto the menu board (taco, concha)
+const ICON_FILES = ["tower", "cactus", "taco", "concha"]
+const ICON = {}, ICON_IMG = {}
+async function loadIcons() {
+  for (const n of ICON_FILES) {
+    let svg = await (await fetch("icons/" + n + ".svg")).text()
+    const vb = svg.match(/viewBox="([^"]+)"/)[1].split(/\s+/).map(Number)
+    ICON[n] = { vb, svg }
+  }
+}
+// an icon image in a colour, with strokes sw viewBox units wide
+function iconImg(n, colour, sw) {
+  const key = n + colour + sw
+  if (ICON_IMG[key]) return ICON_IMG[key]
+  const s = ICON[n].svg.replace(/#231f20/gi, colour).replace(/stroke-width:\s*[^;]+;/g, "")
+    .replace(new RegExp(`stroke:\\s*${colour};`, "gi"), `stroke: ${colour}; stroke-width: ${sw}px;`)
+  const im = new Image(); im.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(s); ICON_IMG[key] = im
+  return im
+}
+// into the ASCII grid, w cells wide, standing on `base`
+function onGround(n, x, base, w, v) {
+  if (!ICON[n]) return
+  const im = iconImg(n, "#ffffff", ICON[n].vb[2] / w * 1.1); if (!im.complete) return
+  const h = w * ICON[n].vb[3] / ICON[n].vb[2]
+  g.save(); g.globalAlpha = v; g.drawImage(im, x, base - h, w, h); g.restore()
+}
+
+const GROUND = 74                                   // the sidewalk's edge, in cells (888 px)
+
+function paint(t) {
+  box(0, 0, COLS, ROWS, .03)
+  // stars
+  let st = 11; const sr = () => (st = (st * 16807) % 2147483647) / 2147483647
+  for (let i = 0; i < 60; i++) {
+    const x = Math.floor(sr() * COLS), y = Math.floor(sr() * 30), k = 1 + Math.floor(sr() * 4), ph = sr() * TAU
+    box(x, y, 1, 1, .28 + .3 * sr() + .16 * Math.sin(TAU * k * t / LT + ph))
+  }
+  // a crescent moon, as over the River Walk
+  g.fillStyle = gray(.95); g.beginPath(); g.arc(40, 8, 3.6, 0, TAU); g.fill()
+  g.fillStyle = gray(.03); g.beginPath(); g.arc(41.6, 7, 3.4, 0, TAU); g.fill()
+  // downtown behind: dim blocks, a few windows still lit at midnight
+  for (const [x, top, w] of [[0, 40, 14], [15, 34, 10], [26, 44, 12], [40, 30, 9], [50, 38, 14], [66, 42, 10], [78, 36, 12], [92, 46, 16], [130, 40, 12], [143, 33, 17]]) {
+    box(x, top, w, GROUND - top, .1)
+    for (let y = top + 2; y < GROUND - 8; y += 3) for (let xx = x + 1; xx < x + w - 1; xx += 3) if (hash(xx, y) > .8) box(xx, y, 1, 1, .32)
+  }
+  // the Tower of the Americas, its beacon blinking
+  onGround("tower", 90, GROUND - 6, 16, .9)
+  box(97, GROUND - 6 - 16 * 38.05 / 21.39 - 1, 2, 1, .3 + .7 * (.5 + .5 * Math.sin(TAU * 15 * t / LT)))
+
+  // the sidewalk and the street
+  box(0, GROUND - 8, COLS, 8, .13)
+  for (let x = 4; x < COLS; x += 12) box(x, GROUND - 8, 1, 8, .2)
+  box(0, GROUND - 8, COLS, 1, .26)
+  box(0, GROUND, COLS, 1, .4)                                           // the curb
+  box(0, GROUND + 1, COLS, ROWS - GROUND - 1, .06)
+  for (let x = 2; x < COLS; x += 14) box(x, 82, 6, 1, .22)               // the lane line
+
+  // a streetlamp past the cactus, its pool on the sidewalk
+  g.save(); g.globalCompositeOperation = "lighten"
+  const pool = g.createRadialGradient(155, GROUND - 4, 0, 155, GROUND - 4, 16)
+  pool.addColorStop(0, gray(.42)); pool.addColorStop(1, gray(.13))
+  g.fillStyle = pool; g.beginPath(); g.ellipse(155, GROUND - 4, 16, 5, 0, 0, TAU); g.fill()
+  g.restore()
+  box(155, 42, 1, GROUND - 42, .4); box(152, 42, 4, 1, .4); box(151, 43, 3, 1, 1)
+
+  // steam off the grill, rising from the roof vent in wisps
+  g.save(); g.globalCompositeOperation = "lighten"
+  for (let i = 0; i < 30; i++) {
+    const age = ((t / LT) * 9 + i / 30) % 1
+    const x = 25 + (i % 3) * 2 + Math.sin(age * 5 + i * 1.7) * 2 + age * 5, y = 30 - age * 22
+    box(Math.round(x), Math.round(y), 1 + (age > .35 ? 1 : 0), 1 + (age > .6 ? 1 : 0), .62 * (1 - age))
+  }
+  g.restore()
+
+  // the cactus by the curb
+  onGround("cactus", 138, GROUND - 1, 13, .95)
+}
+
+// --- drawn in colour, over the ASCII ---
+const AP = new Image(); AP.src = "alamo-python-dark.png"           // Alamo Python's mark, as drawn
+const PENGUIN = new Image(); PENGUIN.src = "penguin.png"            // Linux San Antonio's penguin, pixel art
+
+function rr(x, y, w, h, r) {
+  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r)
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath()
+}
+const glow = (x, y, rx, ry, c) => {
+  ctx.save(); ctx.translate(x, y); ctx.scale(1, ry / rx)
+  const gr = ctx.createRadialGradient(0, 0, 0, 0, 0, rx); gr.addColorStop(0, c); gr.addColorStop(1, "rgba(0,0,0,0)")
+  ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(0, 0, rx, 0, TAU); ctx.fill(); ctx.restore()
+}
+
+// the truck: a step van, box behind and cab in front (facing right), parked at the curb
+const TX = 170, BOX_R = 880, CAB_R = 1070, ROOF = 400, CAB_TOP = 530, BOTTOM = 850, WHEEL_Y = 842
+const CREAM = "#efe6cf", TRIM = "#1c1c1c"
+function truck(t) {
+  const beat = beatPh(t)
+  // the window's warm light on the sidewalk, under everything
+  ctx.save(); ctx.globalCompositeOperation = "lighter"
+  glow(670, 888, 420, 70, "rgba(255,190,110,.22)")
+  ctx.restore()
+
+  // body
+  ctx.fillStyle = CREAM; rr(TX, ROOF, BOX_R - TX, BOTTOM - ROOF, 16); ctx.fill()
+  ctx.beginPath(); ctx.moveTo(BOX_R - 10, CAB_TOP); ctx.lineTo(CAB_R - 70, CAB_TOP); ctx.lineTo(CAB_R - 6, CAB_TOP + 120)
+  ctx.lineTo(CAB_R, BOTTOM - 14); ctx.quadraticCurveTo(CAB_R, BOTTOM, CAB_R - 14, BOTTOM); ctx.lineTo(BOX_R - 10, BOTTOM); ctx.closePath(); ctx.fill()
+  // the night on the paint, darker toward the bottom
+  const shade = ctx.createLinearGradient(0, ROOF, 0, BOTTOM); shade.addColorStop(0, "rgba(10,12,24,.18)"); shade.addColorStop(1, "rgba(10,12,24,.42)")
+  ctx.fillStyle = shade; rr(TX, ROOF, BOX_R - TX, BOTTOM - ROOF, 16); ctx.fill()
+  ctx.beginPath(); ctx.moveTo(BOX_R - 10, CAB_TOP); ctx.lineTo(CAB_R - 70, CAB_TOP); ctx.lineTo(CAB_R - 6, CAB_TOP + 120); ctx.lineTo(CAB_R, BOTTOM); ctx.lineTo(BOX_R - 10, BOTTOM); ctx.closePath(); ctx.fill()
+  // a skirt along the bottom
+  ctx.fillStyle = "#2a2a2a"; ctx.fillRect(TX + 4, BOTTOM - 26, CAB_R - TX - 8, 26)
+
+  // Alamo Python's mark, big on the side
+  if (AP.complete && AP.width) { const s = 260; ctx.drawImage(AP, 340 - s / 2, 600 - s / 2, s, s) }
+
+  // the serving window, lit, with the flap propped open above it
+  const wx = 500, wy = 452, ww = 340, wh = 148
+  const inside = ctx.createLinearGradient(0, wy, 0, wy + wh); inside.addColorStop(0, "#ffd9a0"); inside.addColorStop(1, "#c98a4a")
+  ctx.fillStyle = inside; ctx.fillRect(wx, wy, ww, wh)
+  ctx.fillStyle = "rgba(60,40,20,.35)"; for (let k = 0; k < 4; k++) ctx.fillRect(wx + 20 + k * 82, wy + 18, 50, 30)   // shelves of supplies
+  ctx.fillStyle = "rgba(60,40,20,.5)"; ctx.fillRect(wx + 30, wy + 70, 120, 6)
+  // the cook, in silhouette: working the grill, coming to the window to hand an order out
+  const ord = order(t), cx = ord.cookX, flip = Math.sin(TAU * 1.6 * t) * (ord.handing ? 0 : 1)
+  ctx.save(); ctx.beginPath(); ctx.rect(wx, wy, ww, wh); ctx.clip()
+  ctx.fillStyle = "rgba(42,26,14,.88)"
+  ctx.beginPath(); ctx.arc(cx, wy + 58, 17, 0, TAU); ctx.fill()                                    // head
+  ctx.fillRect(cx - 9, wy + 50 - 22, 18, 8); ctx.beginPath(); ctx.ellipse(cx, wy + 36, 16, 7, 0, 0, TAU); ctx.fill()   // a cap
+  ctx.beginPath(); ctx.roundRect(cx - 34, wy + 80, 68, 80, 18); ctx.fill()                          // shoulders
+  ctx.strokeStyle = "rgba(42,26,14,.88)"; ctx.lineWidth = 11; ctx.lineCap = "round"
+  if (ord.handing) { ctx.beginPath(); ctx.moveTo(cx + 26, wy + 96); ctx.lineTo(cx + 46, wy + 126); ctx.lineTo(cx + 64, wy + 140); ctx.stroke() }
+  else { ctx.beginPath(); ctx.moveTo(cx + 26, wy + 96); ctx.lineTo(cx + 44, wy + 112 - flip * 10); ctx.lineTo(cx + 66, wy + 104 - flip * 16); ctx.stroke()   // the spatula arm
+    ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(cx + 66, wy + 104 - flip * 16); ctx.lineTo(cx + 86, wy + 100 - flip * 22); ctx.stroke() }
+  ctx.lineCap = "butt"; ctx.restore()
+  // OPEN, in pink neon in the corner of the window, catching now and then
+  const fl = Math.floor(t * 9), off = hash(fl, 3) > .965 || (hash(Math.floor(t / 6), 5) > .7 && hash(fl, 4) > .6)
+  ctx.save(); ctx.font = '700 26px "Geist Mono"'; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.letterSpacing = "3px"
+  if (!off) { ctx.shadowColor = "#ff4f7a"; ctx.shadowBlur = 18; ctx.fillStyle = "#ff8fb0" } else ctx.fillStyle = "rgba(120,50,70,.6)"
+  ctx.fillText("OPEN", wx + ww - 64, wy + 28); ctx.shadowBlur = 0
+  ctx.strokeStyle = off ? "rgba(120,50,70,.5)" : "#ff6f96"; ctx.lineWidth = 2; ctx.strokeRect(wx + ww - 120, wy + 10, 112, 36)
+  ctx.letterSpacing = "0px"; ctx.restore()
+  ctx.strokeStyle = TRIM; ctx.lineWidth = 6; ctx.strokeRect(wx, wy, ww, wh)
+  ctx.fillStyle = "#d8cfb8"; ctx.beginPath(); ctx.moveTo(wx - 8, wy - 6); ctx.lineTo(wx + ww + 8, wy - 6); ctx.lineTo(wx + ww + 34, wy - 58); ctx.lineTo(wx - 34, wy - 58); ctx.closePath(); ctx.fill()
+  ctx.strokeStyle = TRIM; ctx.lineWidth = 3; ctx.stroke()
+  for (const px of [wx + 6, wx + ww - 6]) { ctx.beginPath(); ctx.moveTo(px, wy); ctx.lineTo(px + (px < wx + 100 ? -28 : 28), wy - 52); ctx.stroke() }   // the props
+  ctx.fillStyle = "#9aa0a6"; ctx.fillRect(wx - 12, wy + wh, ww + 24, 12)                 // the counter shelf
+  ctx.fillStyle = "#6b7177"; ctx.fillRect(wx - 12, wy + wh + 12, ww + 24, 4)
+
+  // the menu board under the window: chalk taco and concha, prices as chalk dashes
+  const mx = 520, my = 640, mw = 300, mh = 150
+  ctx.fillStyle = "#6b4a2e"; rr(mx - 8, my - 8, mw + 16, mh + 16, 6); ctx.fill()
+  ctx.fillStyle = "#1f2a26"; ctx.fillRect(mx, my, mw, mh)
+  const chalk = "rgba(240,236,224,.9)"
+  if (ICON.taco) { const im = iconImg("taco", "#f0ece0", 1.1); if (im.complete) ctx.drawImage(im, mx + 22, my + 22, 110, 110 * 19.05 / 37.67) }
+  if (ICON.concha) { const im = iconImg("concha", "#f0ece0", 1); if (im.complete) ctx.drawImage(im, mx + 190, my + 14, 74, 74 * 29.44 / 30.73) }
+  ctx.fillStyle = chalk; ctx.font = '700 15px "Geist Mono"'; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"
+  ctx.letterSpacing = "2px"; ctx.fillText("TACOS", mx + 77, my + 112); ctx.fillText("CONCHAS", mx + 227, my + 112); ctx.letterSpacing = "0px"
+  ctx.strokeStyle = chalk; ctx.lineWidth = 2
+  for (const cx of [mx + 77, mx + 227]) { ctx.beginPath(); ctx.moveTo(cx - 22, my + 130); ctx.lineTo(cx + 22, my + 130); ctx.stroke() }
+
+  // the cab: windshield, side window, door, headlight, bumper
+  ctx.fillStyle = "#20252b"
+  ctx.beginPath(); ctx.moveTo(CAB_R - 76, CAB_TOP + 12); ctx.lineTo(CAB_R - 22, CAB_TOP + 120); ctx.lineTo(CAB_R - 64, CAB_TOP + 120); ctx.lineTo(CAB_R - 100, CAB_TOP + 12); ctx.closePath(); ctx.fill()
+  ctx.fillRect(BOX_R + 20, CAB_TOP + 14, 80, 92)
+  ctx.strokeStyle = "rgba(28,28,28,.6)"; ctx.lineWidth = 3; ctx.strokeRect(BOX_R + 12, CAB_TOP + 6, 96, BOTTOM - CAB_TOP - 40)
+  ctx.fillStyle = "#3a3a3a"; ctx.fillRect(BOX_R + 84, CAB_TOP + 150, 18, 5)              // the door handle
+  ctx.fillStyle = "#2a2a2a"; ctx.fillRect(CAB_R - 30, BOTTOM - 40, 40, 24)                // bumper
+  ctx.fillStyle = "#c8c2a8"; ctx.beginPath(); ctx.ellipse(CAB_R - 8, CAB_TOP + 170, 7, 12, 0, 0, TAU); ctx.fill()   // headlight, off: parked
+  // outlines
+  ctx.strokeStyle = TRIM; ctx.lineWidth = 3; rr(TX, ROOF, BOX_R - TX, BOTTOM - ROOF, 16); ctx.stroke()
+  ctx.fillStyle = "#3a3a3a"; ctx.fillRect(TX + 6, ROOF - 18, BOX_R - TX - 12, 18)         // the roof rim
+  ctx.fillRect(TX + 120, ROOF - 40, 90, 22)                                               // a vent
+  ctx.fillStyle = "#b8202a"; ctx.fillRect(TX - 4, ROOF + 60, 8, 40)                        // tail light
+
+  // wheels
+  for (const wx2 of [320, 960]) {
+    ctx.fillStyle = "#151515"; ctx.beginPath(); ctx.arc(wx2, WHEEL_Y, 54, Math.PI, 0); ctx.fill()
+    ctx.beginPath(); ctx.arc(wx2, WHEEL_Y, 46, 0, TAU); ctx.fill()
+    ctx.fillStyle = "#8a8a84"; ctx.beginPath(); ctx.arc(wx2, WHEEL_Y, 22, 0, TAU); ctx.fill()
+    ctx.fillStyle = "#555"; ctx.beginPath(); ctx.arc(wx2, WHEEL_Y, 7, 0, TAU); ctx.fill()
+  }
+
+  // string lights along the roof, warm bulbs breathing in whole cycles
+  const at = x => ROOF - 22 + 26 * Math.sin(Math.PI * (x - TX) / (BOX_R - TX))
+  ctx.strokeStyle = "#111"; ctx.lineWidth = 2; ctx.beginPath()
+  for (let x = TX; x <= BOX_R; x += 10) x === TX ? ctx.moveTo(x, at(x)) : ctx.lineTo(x, at(x)); ctx.stroke()
+  ctx.save(); ctx.globalCompositeOperation = "lighter"
+  for (let i = 0, x = TX + 20; x < BOX_R - 10; i++, x += 42) {
+    const a = Math.min(1, (.6 + .3 * Math.sin(TAU * (1 + i % 3) * t / LT + i)) * (.8 + .3 * pulseAt(t)))
+    glow(x, at(x) + 9, 22, 22, `rgba(255,200,120,${(.35 * a).toFixed(2)})`)
+    ctx.fillStyle = `rgba(255,214,150,${a.toFixed(2)})`; ctx.beginPath(); ctx.ellipse(x, at(x) + 9, 4.5, 6, 0, 0, TAU); ctx.fill()
+  }
+  ctx.restore()
+}
+
+// --- one feature, shipped across the song: the terminal's script, by fraction of the song ---
+// kinds: cmd (typed out), out (grey), edit/run/build (updated in place), fail (red), ok (green)
+const STORY = [
+  [.010, "cmd", "$ git checkout -b starter-311-this-week"],
+  [.035, "out", "Switched to branch 'starter-311-this-week'"],
+  [.060, "cmd", "$ vim starters/311-this-week/index.js"],
+  [.078, "edit", p => `  editing index.js   +${Math.round(1 + p * 47)} −${Math.round(p * 6)}`, .300],
+  [.310, "cmd", "$ pnpm test"],
+  [.330, "run", p => `  running 11 tests ${".".repeat(1 + Math.floor(p * 9) % 3)}`, .355],
+  [.355, "fail", "✗ 1 failed · handles an empty week"],
+  [.378, "cmd", "$ vim starters/311-this-week/index.js"],
+  [.392, "edit", p => `  editing index.js   +${Math.round(1 + p * 4)} −${Math.round(p * 2)}`, .460],
+  [.470, "cmd", "$ pnpm test"],
+  [.488, "run", p => `  running 11 tests ${".".repeat(1 + Math.floor(p * 9) % 3)}`, .510],
+  [.510, "ok", "✓ 11 passed"],
+  [.535, "cmd", "$ git commit -m \"Add a 311 starter\""],
+  [.565, "cmd", "$ git push"],
+  [.600, "cmd", "$ gh pr create --fill"],
+  [.625, "out", "→ pull request #12 opened"],
+  [.660, "run", p => `  waiting for review ${".".repeat(1 + Math.floor(p * 20) % 3)}`, .720],
+  [.720, "ok", "✓ review: approved"],
+  [.750, "cmd", "$ gh pr merge --squash"],
+  [.780, "cmd", "$ node starters/311-this-week"],
+  [.800, "build", p => `  reading the City's 311 [${"█".repeat(Math.round(p * 8)).padEnd(8, "░")}]`, .955],
+  [.960, "ok", "✓ shipped to localhost:210"],
+]
+const COLOUR = { cmd: "rgba(235,235,235,.95)", out: "rgba(170,180,195,.9)", edit: "#7fd6cf", run: "rgba(170,180,195,.9)", build: "#ffcf6a", fail: "#ff6b6b", ok: "#5be3a0" }
+function storyAt(t) {
+  const f = t / T, lines = []
+  let phase = "idle"
+  for (const [f0, kind, text, f1] of STORY) {
+    if (f < f0) break
+    let s2
+    if (kind === "cmd") { const n = Math.floor((t - f0 * T) / 1.1 * text.length); s2 = text.slice(0, Math.max(2, n)); if (n < text.length) phase = "typing" }
+    else if (typeof text === "function") { s2 = text(span(f, f0, f1)); if (kind === "edit" && f < f1) phase = "typing" }
+    else s2 = text
+    lines.push([s2, COLOUR[kind]])
+    if (kind === "fail") phase = f < .378 ? "failed" : phase
+    if (kind === "ok" && f0 === .960) phase = "shipped"
+  }
+  const screen = f >= .96 ? "ok" : f >= .51 && f < .535 ? "ok" : f >= .355 && f < .378 ? "fail" : "code"
+  return { lines: lines.slice(-5), phase, screen, f }
+}
+
+// the table: the penguin behind a laptop, a concha on a plate, a horchata
+const bite = document.createElement("canvas"); bite.width = 72; bite.height = 72; const bg2 = bite.getContext("2d")
+function table(t) {
+  const beat = beatPh(t), st = storyAt(t)
+  const tx = 1270, tw = 300, top = 815
+  // the penguin: nodding along; leaning in while it types, slumping when a test fails, hopping when it ships
+  if (PENGUIN.complete && PENGUIN.width) {
+    const h = 165, w = h * PENGUIN.width / PENGUIN.height, nod = (0.5 - 0.5 * Math.cos(beat * TAU)) * 3
+    let dy = nod, rot = 0
+    if (st.phase === "typing") { dy = 7 + Math.abs(Math.sin(TAU * 4 * t)) * 2.5; rot = .03 }
+    if (st.phase === "failed") { dy = 16; rot = -.07 }
+    if (st.phase === "shipped") { dy = -Math.abs(Math.sin(TAU * 1.3 * t)) * 30; rot = Math.sin(TAU * 2.6 * t) * .1 }
+    ctx.save(); ctx.translate(1420, top - 12 + dy); ctx.rotate(rot)
+    ctx.imageSmoothingEnabled = false; ctx.drawImage(PENGUIN, -w / 2, -h, w, h); ctx.imageSmoothingEnabled = true
+    if (st.phase === "shipped") {                                                       // flippers up
+      ctx.fillStyle = "#151515"
+      for (const d of [-1, 1]) { ctx.save(); ctx.translate(d * w * .36, -h * .5); ctx.rotate(d * (-.9 + Math.sin(TAU * 2.6 * t) * .25)); ctx.fillRect(-7, -46, 14, 46); ctx.restore() }
+    }
+    ctx.restore()
+  }
+  // the laptop, its screen toward us: code scrolling while it types, red on a failure, green on a pass
+  const sx = 1352, sy = 738, sw = 136, sh = 76
+  ctx.fillStyle = "#2b2d31"; rr(sx - 6, sy - 6, sw + 12, sh + 10, 6); ctx.fill()
+  ctx.fillStyle = st.screen === "ok" ? "#0e2a1c" : st.screen === "fail" ? "#2a1012" : "#0e1622"; ctx.fillRect(sx, sy, sw, sh)
+  ctx.save(); ctx.beginPath(); ctx.rect(sx, sy, sw, sh); ctx.clip()
+  if (st.screen === "code") {
+    const cols = [TEAL, PINK, ORANGE, "#9fb3c8", "#9fb3c8", "#e6e6e6"], rate = st.phase === "typing" ? 8 : 1.5
+    for (let i = -1; i < 11; i++) {
+      const n = i + Math.floor(t * rate / 8), y = sy + 6 + i * 8 - (t * rate % 8)
+      const ind = (hash(n, 1) * 3 | 0) * 8, len = 24 + hash(n, 2) * 70
+      ctx.fillStyle = cols[(hash(n, 3) * cols.length) | 0]; ctx.globalAlpha = .85
+      ctx.fillRect(sx + 8 + ind, y, len, 3)
+      if (hash(n, 4) > .5) { ctx.fillStyle = "#9fb3c8"; ctx.fillRect(sx + 14 + ind + len, y, 18 + hash(n, 5) * 20, 3) }
+    }
+  } else {
+    ctx.font = '700 40px "Geist Mono"'; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+    ctx.fillStyle = st.screen === "ok" ? "#5be3a0" : "#ff6b6b"; ctx.fillText(st.screen === "ok" ? "✓" : "✗", sx + sw / 2, sy + sh / 2 + 2)
+  }
+  ctx.restore(); ctx.globalAlpha = 1
+  ctx.fillStyle = "#3a3d42"; ctx.beginPath(); ctx.moveTo(sx - 14, top - 2); ctx.lineTo(sx + sw + 14, top - 2); ctx.lineTo(sx + sw + 6, top - 9); ctx.lineTo(sx - 6, top - 9); ctx.closePath(); ctx.fill()
+  // the screen's light on the penguin, in the screen's colour
+  const lightCol = st.screen === "ok" ? "rgba(90,230,150,.2)" : st.screen === "fail" ? "rgba(255,90,90,.18)" : "rgba(120,170,255,.12)"
+  ctx.save(); ctx.globalCompositeOperation = "lighter"; glow(1420, 735, 130, 95, lightCol); ctx.restore()
+
+  // a paper plate with a concha, a bite gone every so often; a horchata going down
+  ctx.fillStyle = "#e8e2d4"; ctx.beginPath(); ctx.ellipse(1305, top - 4, 30, 7, 0, 0, TAU); ctx.fill()
+  if (ICON.concha) { const im = iconImg("concha", "#e7b46a", 1); if (im.complete) {
+    bg2.globalCompositeOperation = "source-over"; bg2.clearRect(0, 0, 72, 72); bg2.drawImage(im, 0, 0, 72, 72 * 29.44 / 30.73)
+    bg2.globalCompositeOperation = "destination-out"
+    const bites = Math.min(4, Math.floor(st.f * 5))
+    for (let k = 0; k < bites; k++) { bg2.beginPath(); bg2.arc(72 - k * 15, 18 + (k % 2) * 16, 15, 0, TAU); bg2.fill() }
+    ctx.drawImage(bite, 1287, top - 38, 36, 36)
+    if (bites) { ctx.fillStyle = "#e7b46a"; for (let k = 0; k < 5; k++) ctx.fillRect(1290 + hash(k, 1) * 30, top - 6 - hash(k, 2) * 3, 2, 2) }   // crumbs
+  } }
+  const cupT = top - 46, cupB = top - 2, level = cupB - (cupB - cupT - 4) * (1 - .85 * st.f)
+  ctx.fillStyle = "rgba(242,237,226,.55)"; ctx.beginPath(); ctx.moveTo(1520, cupT); ctx.lineTo(1546, cupT); ctx.lineTo(1542, cupB); ctx.lineTo(1524, cupB); ctx.closePath(); ctx.fill()
+  ctx.save(); ctx.clip(); ctx.fillStyle = "#efe4cc"; ctx.fillRect(1518, level, 30, cupB - level); ctx.restore()
+  ctx.strokeStyle = "rgba(255,255,255,.7)"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(1520, cupT); ctx.lineTo(1524, cupB); ctx.lineTo(1542, cupB); ctx.lineTo(1546, cupT); ctx.stroke()
+  ctx.strokeStyle = PINK; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(1536, cupB - 6); ctx.lineTo(1544, cupT - 20); ctx.stroke()   // a straw
+
+  // the folding table, its top and X legs
+  ctx.fillStyle = "#d9d4c8"; ctx.fillRect(tx, top, tw, 10)
+  ctx.fillStyle = "#a9a49a"; ctx.fillRect(tx, top + 10, tw, 4)
+  ctx.strokeStyle = "#8d887f"; ctx.lineWidth = 5
+  for (const lx of [tx + 30, tx + tw - 30]) { ctx.beginPath(); ctx.moveTo(lx - 22, top + 14); ctx.lineTo(lx + 22, 888); ctx.moveTo(lx + 22, top + 14); ctx.lineTo(lx - 22, 888); ctx.stroke() }
+
+  // the terminal over the penguin's head: the last five lines of the feature's story
+  if (st.lines.length) {
+    const bx = 1290, by = 452, bw = 430, bh = 172
+    ctx.fillStyle = "rgba(14,18,26,.93)"; rr(bx, by, bw, bh, 10); ctx.fill()
+    ctx.strokeStyle = st.phase === "shipped" ? "rgba(91,227,160,.6)" : "rgba(255,255,255,.18)"; ctx.lineWidth = 2; ctx.stroke()
+    ;[PINK, ORANGE, TEAL].forEach((col, i) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(bx + 16 + i * 14, by + 14, 4, 0, TAU); ctx.fill() })
+    ctx.font = '700 14px "Geist Mono"'; ctx.fillStyle = "rgba(255,255,255,.4)"; ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillText("~/localhost", bx + bw - 14, by + 14)
+    ctx.font = '700 16px "Geist Mono"'; ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"
+    st.lines.forEach(([txt, col], i) => { ctx.fillStyle = col; ctx.fillText(txt, bx + 16, by + 50 + i * 25) })
+    if (st.phase !== "shipped" && Math.floor(t * 2) % 2 === 0) {                                      // the cursor
+      const [last] = st.lines[st.lines.length - 1], i = st.lines.length - 1
+      ctx.fillStyle = "rgba(235,235,235,.9)"; ctx.fillRect(bx + 18 + ctx.measureText(last).width, by + 36 + i * 25, 9, 17)
+    }
+  }
+  // shipped: confetti in the brand colours over the table
+  if (st.phase === "shipped") {
+    const age = t - .96 * T
+    for (let k = 0; k < 60; k++) {
+      const a = (age * .7 + hash(k, 1)) % 1, x = 1300 + hash(k, 2) * 300 + Math.sin(a * 8 + k) * 14, y = 440 + a * 380
+      ctx.fillStyle = [TEAL, PINK, ORANGE][k % 3]; ctx.save(); ctx.translate(x, y); ctx.rotate(a * 9 + k); ctx.fillRect(-4, -2, 8, 4); ctx.restore()
+    }
+  }
+}
+
+// --- a customer: one of the court's bots, walking up for tacos once a cycle ---
+// the order's timeline (seconds into each ~60 s cycle), shared with the cook
+function order(t) {
+  const c = t % LT, wx = 500, ww = 340
+  const x = c < 8 ? lerp(-90, 690, ease(c / 8)) : c < 16.5 ? 690 : c < 24.5 ? lerp(690, -90, ease(span(c, 16.5, 24.5))) : -200
+  const moving = (c < 8) || (c > 16.5 && c < 24.5)
+  const handing = c > 12.5 && c < 15.2
+  const cookX = c > 9 && c < 16 ? lerp(wx + 130, wx + 230, ease(span(c, 9, 11))) : wx + 110 + (ww - 230) * (.5 + .5 * Math.sin(TAU * 3 * t / LT))
+  const hasTaco = c >= 14.6 && c < 24.5
+  const status = c < 8 ? "act · get tacos" : c < 12.5 ? "observe · order #7" : c < 14.6 ? "act · take order" : c < 24.5 ? "✓ tacos acquired" : ""
+  return { x, moving, handing, cookX, hasTaco, status, c, show: c < 24.5 }
+}
+// the customer: one of the court's plush agents (plush.js), orange #42
+function customer(t) {
+  const o = order(t); if (!o.show) return
+  const x = o.x, s = 1.55, reach = o.c > 12.5 && o.c < 14.8
+  const head = drawPlush(ctx, { x, y: 888, s, tint: ORANGE, number: "42", t, stride: TAU * 1.8 * t * .5, run: o.moving ? 1 : 0,
+    lean: o.moving ? (o.c < 8 ? .06 : -.06) : 0, armsUp: reach, hold: o.hasTaco, mouth: o.hasTaco ? 1 : reach ? .5 : 0,
+    look: o.c > 8 && o.c < 16.5 ? 4 : o.c >= 16.5 ? -4 : 4, seed: 42 })
+  // the foil-wrapped taco: handed out of the window, then carried at its belly
+  if (o.handing && !o.hasTaco) { const p = span(o.c, 12.8, 14.6); ctx.fillStyle = "#c9ccd1"; ctx.beginPath(); ctx.ellipse(lerp(700, x + 20, p), lerp(590, head.headY + 40, p), 22, 11, -.2, 0, TAU); ctx.fill() }
+  if (o.hasTaco) { ctx.fillStyle = "#c9ccd1"; ctx.beginPath(); ctx.ellipse(x, head.bellyY + 6, 24, 12, -.15, 0, TAU); ctx.fill()
+    ctx.strokeStyle = "rgba(255,255,255,.75)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x - 16, head.bellyY + 2); ctx.lineTo(x + 14, head.bellyY + 8); ctx.stroke() }
+  // its status chip
+  if (o.status) {
+    ctx.font = '700 13px "Geist Mono"'; ctx.textAlign = "left"; ctx.textBaseline = "middle"
+    const cw = ctx.measureText(o.status).width + 36, cx2 = x - cw / 2, cy2 = head.headY - 34
+    ctx.fillStyle = "rgba(12,14,18,.88)"; ctx.beginPath(); ctx.roundRect(cx2, cy2, cw, 22, 11); ctx.fill()
+    ctx.strokeStyle = ORANGE; ctx.lineWidth = 1.5; ctx.stroke()
+    const a0 = t * TAU * 1.1
+    ctx.strokeStyle = ORANGE; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx2 + 13, cy2 + 11, 5.5, a0, a0 + TAU * .75); ctx.stroke()
+    ctx.fillStyle = "rgba(235,235,235,.95)"; ctx.fillText(o.status, cx2 + 25, cy2 + 11.5)
+  }
+}
+
+// --- the street and the sky, in colour ---
+// the Tower of the Americas lit, slowly cycling teal, pink and orange
+function towerLight(t) {
+  const u = (t / LT * 3) % 3, i = Math.floor(u), p = u - i
+  const hex = h => [1, 3, 5].map(k => parseInt(h.slice(k, k + 2), 16))
+  const [a, b2] = [hex([TEAL, PINK, ORANGE][i]), hex([TEAL, PINK, ORANGE][(i + 1) % 3])]
+  const c = a.map((v, k) => Math.round(lerp(v, b2[k], ease(p)))).join(",")
+  ctx.save(); ctx.globalCompositeOperation = "lighter"
+  glow(1176, 560, 120, 70, `rgba(${c},.42)`)                      // the pod
+  const shaft = ctx.createLinearGradient(0, 560, 0, 820); shaft.addColorStop(0, `rgba(${c},.26)`); shaft.addColorStop(1, `rgba(${c},0)`)
+  ctx.fillStyle = shaft; ctx.fillRect(1146, 560, 60, 260)
+  ctx.restore()
+}
+// a car along the street, a few times a song, its headlights sweeping the truck and the table
+function car(t) {
+  const c = (t + LT * .55) % LT; if (c > 7) return
+  const x = lerp(2150, -420, c / 7), y = 968
+  ctx.save(); ctx.globalCompositeOperation = "lighter"
+  const beam = ctx.createLinearGradient(x, 0, x - 700, 0); beam.addColorStop(0, "rgba(255,240,200,.32)"); beam.addColorStop(1, "rgba(255,240,200,0)")
+  ctx.fillStyle = beam; ctx.beginPath(); ctx.moveTo(x, y - 40); ctx.lineTo(x - 700, y - 260); ctx.lineTo(x - 700, y + 10); ctx.lineTo(x, y - 24); ctx.closePath(); ctx.fill()
+  ctx.restore()
+  ctx.fillStyle = "#121418"; rr(x, y - 56, 300, 46, 12); ctx.fill(); rr(x + 70, y - 92, 150, 40, 14); ctx.fill()
+  ctx.fillStyle = "rgba(120,140,170,.35)"; rr(x + 82, y - 86, 126, 28, 8); ctx.fill()
+  ctx.fillStyle = "#fff4d6"; ctx.fillRect(x - 2, y - 44, 12, 10)
+  ctx.fillStyle = "#ff3b30"; ctx.fillRect(x + 294, y - 46, 8, 10)
+  ctx.fillStyle = "#0a0b0d"; ctx.beginPath(); ctx.arc(x + 64, y - 10, 22, 0, TAU); ctx.arc(x + 236, y - 10, 22, 0, TAU); ctx.fill()
+}
+
+function render(t) {
+  t = ((t % T) + T) % T
+  paint(t)
+  const d = g.getImageData(0, 0, COLS, ROWS).data
+  ctx.fillStyle = "#0c0c0c"; ctx.fillRect(0, 0, W, H)
+  ctx.font = `700 ${CELL + 1}px "Geist Mono"`; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+  for (let y = 0; y < ROWS; y++) for (let x = 0; x < COLS; x++) {
+    const v = d[(y * COLS + x) * 4] / 255
+    const ch = RAMP[Math.min(RAMP.length - 1, Math.floor(v * RAMP.length))]
+    if (ch === " ") continue
+    ctx.fillStyle = `rgba(235,235,235,${(.25 + v * .75).toFixed(2)})`
+    ctx.fillText(ch, x * CELL + CELL / 2, y * CELL + CELL / 2 + 1)
+  }
+  towerLight(t)
+  truck(t)
+  customer(t)
+  table(t)
+  car(t)
+
+  // footer: who this is, and the music credit
+  const cr = window.CREDITS && window.CREDITS.length ? window.CREDITS : ['"Tejano Lofi" by Patrick · made with Suno']
+  const line = cr[Math.floor(t / 15) % cr.length]
+  ctx.textAlign = "right"; ctx.textBaseline = "alphabetic"
+  ctx.font = '500 20px "Geist"'; ctx.fillStyle = "rgba(255,255,255,0.75)"
+  ctx.fillText("♪  " + line, W - 60, H - 52)
+  ctx.textAlign = "left"; ctx.font = '700 22px "Geist Mono"'; ctx.fillStyle = "rgba(255,255,255,0.8)"
+  ctx.letterSpacing = "3px"; ctx.fillText("DEVSA FM  ·  devsa.community", 60, H - 52); ctx.letterSpacing = "0px"
+  const tw = 46
+  ;[TEAL, PINK, ORANGE].forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(60 + i * (tw + 6), H - 40, tw, 6) })
+}
+
+window.render = render
+window.ready = Promise.all([document.fonts.load('700 20px "Geist Mono"'), document.fonts.load('500 20px "Geist"'), loadIcons(),
+  ...[AP, PENGUIN].map(i => i.complete ? 0 : new Promise(r => { i.onload = r; i.onerror = r }))])
+  .then(() => { paint(0); render(0); return new Promise(r => setTimeout(r, 400)) })
+window.ready.then(() => {
+  if (new URLSearchParams(location.search).has("still")) return render(8)
+  const t0 = performance.now()
+  ;(function loop() { render((performance.now() - t0) / 1000); requestAnimationFrame(loop) })()
+})
+</script>
+</body>
+</html>

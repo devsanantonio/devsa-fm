@@ -1,0 +1,15 @@
+{
+  "name": "devsa-fm",
+  "version": "1.0.0",
+  "description": "A daily 2.5-hour YouTube livestream on @devsatx: music for San Antonio's learners and builders, over an ASCII room with the DEVSA mark as a pixel character nodding along.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "puppeteer-core": "^24.43.1"
+  }
+}
