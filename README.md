@@ -45,7 +45,6 @@ The night mix, in the order it plays. A scene from the community that joins it i
 | `cathedral` | San Fernando Cathedral with a projection show mapped to the stone, then DEVSA's conference films; agents watch from folding chairs |
 | `dome` | a flying roadster on the street by the Alamodome |
 | `ride` | the back seat of a driverless taxi heading downtown toward the Tower |
-| `grocery`, `market`, `room` | dusk at a grocery; Market Square by day at Fiesta; an ASCII room |
 | `starter` | **the template**: copy it to start a scene |
 
 Each scene is `scene/<name>.html`. Shared code is in `scene/fmkit.js` (the ASCII renderer, colours,

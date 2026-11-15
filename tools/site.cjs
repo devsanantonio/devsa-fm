@@ -81,7 +81,7 @@ const indexHtml = page('DEVSA FM: the scenes', `
   </section>
   <section>
     <div class="head"><span class="eyebrow">More scenes</span></div>
-    <h2>Not in tonight's mix</h2>
+    <h2>Not in the mix, worth a look</h2>
     <div class="grid">${scenes.filter(s => !s.mix).map(card).join('')}</div>
   </section>
   <p class="note">Some scenes draw the City of San Antonio's icons on stream. Those aren't published, so here the scenes run without them,
