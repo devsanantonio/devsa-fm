@@ -47,7 +47,8 @@ function box(x, y, w, h, v) { g.fillStyle = gray(v); g.fillRect(x, y, w, h) }
 // the Tower of the Americas, from the City of San Antonio's icons, at the end of the street
 let TOWER = null
 async function loadTower() {
-  let svg = await (await fetch("icons/tower.svg")).text()
+  let svg = await fetch("icons/tower.svg").then(r => r.ok ? r.text() : "", () => "")
+  if (!/viewBox=/.test(svg)) return        // the City's icons are optional
   const vb = svg.match(/viewBox="([^"]+)"/)[1].split(/\s+/).map(Number)
   svg = svg.replace(/#231f20/gi, "#ffffff").replace(/stroke-width:\s*[^;]+;/g, "").replace(/stroke:\s*#ffffff;/g, `stroke: #ffffff; stroke-width: ${(vb[2] / 12) * 1.1}px;`)
   const im = new Image(); im.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg)

@@ -1,0 +1,78 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: "Geist Mono"; font-weight: 700; src: url(fonts/GeistMono-Bold.woff2) format("woff2"); }
+  @font-face { font-family: "Geist"; font-weight: 500; src: url(fonts/Geist-Medium.woff2) format("woff2"); }
+  html, body { margin: 0; background: #0c0c0c; overflow: hidden }
+  canvas { display: block }
+</style>
+</head>
+<body>
+<!--
+  DEVSA FM, the starter scene: copy this file to start your own (see CONTRIBUTING.md).
+
+  How a scene works, in three layers, drawn fresh every frame by render(t):
+    1. paint(t)   the world in GREYS, at one pixel per character (160 x 90), into `g`.
+                  Brighter grey = a denser character. This is what gives DEVSA FM its ASCII look.
+    2. fm.ascii() turns every cell of that grey picture into a character on the real canvas.
+    3. colour     anything that gives off light (lamps, signs, agents, screens) is drawn in colour
+                  on top, in `ctx`, at full 1920 x 1080.
+  t is seconds since the loop began. Everything must come back to where it started when t reaches
+  fm.T (60 s unless the scene is synced to a song), so the loop has no visible seam.
+-->
+<canvas id="c" width="1920" height="1080"></canvas>
+<script src="plush.js"></script>
+<script src="fmkit.js"></script>
+<script>
+const { W, H, TAU, CELL, TEAL, PINK, ORANGE, ctx, g, T, lerp, hash, glow, lit, footer } = fm
+
+const GROUND = 820                                         // in pixels; the street line
+
+// --- 1. the world, in greys --------------------------------------------------------------------
+function paint(t) {
+  g.setTransform(1 / CELL, 0, 0, 1 / CELL, 0, 0)          // draw in pixel units; it lands one pixel per character
+  g.fillStyle = fm.gray(.02); g.fillRect(0, 0, W, H)       // the night
+  for (let i = 0; i < 60; i++) {                           // stars, twinkling (a whole number of cycles per loop)
+    const x = hash(i, 1) * W, y = hash(i, 2) * 500
+    g.fillStyle = fm.gray(.25 + .2 * Math.sin(TAU * 3 * t / T + i)); g.fillRect(x, y, CELL, CELL)
+  }
+  for (const [x0, w, h] of [[120, 220, 300], [380, 160, 420], [1360, 240, 360], [1640, 180, 260]]) {   // downtown, dim
+    g.fillStyle = fm.gray(.12); g.fillRect(x0, GROUND - h, w, h)
+    for (let y = GROUND - h + 24; y < GROUND - 24; y += 36) for (let x = x0 + 18; x < x0 + w - 18; x += 30)
+      if (hash(x, y) > .6) { g.fillStyle = fm.gray(.4); g.fillRect(x, y, 14, 18) }   // lit windows
+  }
+  g.fillStyle = fm.gray(.18); g.fillRect(0, GROUND, W, H - GROUND)   // the street
+  g.setTransform(1, 0, 0, 1, 0, 0)
+  // The City of San Antonio's icons are optional (not in the public repo): this draws the Tower of
+  // the Americas if icons/tower.svg is present and skips it if not. onGround works in character cells.
+  fm.onGround("tower", 66, GROUND / CELL, 22, .9)
+}
+
+// --- 3. in colour ------------------------------------------------------------------------------
+function stringLights(t) {                                 // a string of bulbs in the brand colours, pulsing on the beat
+  const y0 = 300, sag = 60
+  ctx.strokeStyle = "rgba(255,255,255,.2)"; ctx.lineWidth = 1.5; ctx.beginPath()
+  for (let i = 0; i <= 40; i++) { const p = i / 40; ctx.lineTo(p * W, y0 + Math.sin(p * Math.PI) * sag) } ctx.stroke()
+  for (let i = 1; i < 16; i++) {
+    const p = i / 16, x = p * W, y = y0 + Math.sin(p * Math.PI) * sag + 8, c = [TEAL, PINK, ORANGE][i % 3]
+    lit(() => glow(x, y, 30, 30, fm.rgba(c, .35 + .3 * fm.pulseAt(t))))
+    ctx.fillStyle = "#fff4d6"; ctx.beginPath(); ctx.arc(x, y, 4, 0, TAU); ctx.fill()
+  }
+}
+function agent(t) {                                        // one of DEVSA FM's agents (plush.js), walking across once a loop
+  const x = lerp(-120, W + 120, (t % T) / T)
+  drawPlush(ctx, { x, y: GROUND + 40, s: 1.3, tint: TEAL, number: "07", t, stride: TAU * 1.6 * t, run: 1, look: 4, mouth: .3, seed: 7 })
+}
+
+function render(t) {
+  paint(t)                                                 // 1
+  fm.ascii("#0c0c0c")                                      // 2
+  stringLights(t); agent(t)                                // 3
+  footer(t)                                                // DEVSA FM · devsa.community, and the song credit
+}
+fm.start(render, [fm.loadIcons(["tower"])])
+</script>
+</body>
+</html>

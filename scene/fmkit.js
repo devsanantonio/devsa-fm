@@ -25,7 +25,8 @@ const fm = (() => {
   const ICON = {}, ICON_IMG = {}
   async function loadIcons(names) {
     for (const n of names) {
-      const svg = await (await fetch("icons/" + n + ".svg")).text()
+      const svg = await fetch("icons/" + n + ".svg").then(r => r.ok ? r.text() : "", () => "")
+      if (!/viewBox=/.test(svg)) continue    // the City's icons are optional: a clone without them still runs
       ICON[n] = { vb: svg.match(/viewBox="([^"]+)"/)[1].split(/\s+/).map(Number), svg }
     }
   }
@@ -83,6 +84,8 @@ const fm = (() => {
     ctx.fillStyle = fade; ctx.fillRect(0, H - 130, W, 130)
     ctx.textAlign = "right"; ctx.textBaseline = "alphabetic"
     ctx.font = '500 20px "Geist"'; ctx.fillStyle = "rgba(255,255,255,0.75)"; ctx.fillText("♪  " + line, W - 60, H - 52)
+    // a contributed scene credits its maker: set window.SCENE_BY = "Name or @handle" in the scene
+    if (window.SCENE_BY) { ctx.font = '500 17px "Geist"'; ctx.fillStyle = "rgba(255,255,255,0.6)"; ctx.fillText("scene by " + window.SCENE_BY, W - 60, H - 80) }
     ctx.textAlign = "left"; ctx.font = '700 22px "Geist Mono"'; ctx.fillStyle = "rgba(255,255,255,0.8)"
     ctx.letterSpacing = "3px"; ctx.fillText("DEVSA FM  ·  devsa.community", 60, H - 52); ctx.letterSpacing = "0px"
     ;[TEAL, PINK, ORANGE].forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(60 + i * 52, H - 40, 46, 6) })

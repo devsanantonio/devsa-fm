@@ -51,7 +51,8 @@ const ICON_FILES = ["tower", "cactus", "taco", "concha"]
 const ICON = {}, ICON_IMG = {}
 async function loadIcons() {
   for (const n of ICON_FILES) {
-    let svg = await (await fetch("icons/" + n + ".svg")).text()
+    let svg = await fetch("icons/" + n + ".svg").then(r => r.ok ? r.text() : "", () => "")
+    if (!/viewBox=/.test(svg)) continue      // the City's icons are optional: a clone without them still runs
     const vb = svg.match(/viewBox="([^"]+)"/)[1].split(/\s+/).map(Number)
     ICON[n] = { vb, svg }
   }

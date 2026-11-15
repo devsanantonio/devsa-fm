@@ -39,7 +39,8 @@ const ICON_FILES = ["alamo", "tower", "cactus2", "concha", "mission-bell", "guit
 const ICON = {}
 async function loadIcons() {
   for (const n of ICON_FILES) {
-    let svg = await (await fetch("icons/" + n + ".svg")).text()
+    let svg = await fetch("icons/" + n + ".svg").then(r => r.ok ? r.text() : "", () => "")
+    if (!/viewBox=/.test(svg)) continue      // the City's icons are optional: a clone without them still runs
     const vb = svg.match(/viewBox="([^"]+)"/)[1].split(/\s+/).map(Number)
     svg = svg.replace(/#231f20/gi, "#ffffff")
     ICON[n] = { vb, svg }
@@ -51,6 +52,7 @@ function icon(n, x, y, w, v) {
   const key = n + "@" + w
   let im = ICON_IMG[key]
   if (!im) {
+    if (!ICON[n]) return                       // an icon that isn't here (they're optional)
     const { vb, svg } = ICON[n], sw = (vb[2] / w) * 1.1
     const s2 = svg.replace(/stroke-width:\s*[^;]+;/g, "").replace(/stroke:\s*#ffffff;/g, `stroke: #ffffff; stroke-width: ${sw}px;`)
     im = new Image(); im.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(s2); ICON_IMG[key] = im
@@ -90,13 +92,13 @@ function paint(t) {
   icon("maracas", sx + 18, sy + 15, 11, .8)
   icon("cactus2", sx + 21, sy - 12, 10, .85)
   // a guitar leaning against the shelf
-  { const gw = 13, gh = gw * ICON.guitar.vb[3] / ICON.guitar.vb[2]; g.save(); g.translate(sx + 35 + gw / 2, 72); g.rotate(-0.12); icon("guitar", -gw / 2, -gh, gw, .85); g.restore() }
+  if (ICON.guitar) { const gw = 13, gh = gw * ICON.guitar.vb[3] / ICON.guitar.vb[2]; g.save(); g.translate(sx + 35 + gw / 2, 72); g.rotate(-0.12); icon("guitar", -gw / 2, -gh, gw, .85); g.restore() }
 
   // on the wall: a framed print of the Alamo, and a hat on a hook
   const px = 52, py = 10
   frame(px, py, 36, 26, .55); frame(px + 2, py + 2, 32, 22, .25)
   icon("alamo", px + 5, py + 6, 26, .95)
-  { const hw = 15, hh = hw * ICON["cowboy-hat"].vb[3] / ICON["cowboy-hat"].vb[2]; icon("cowboy-hat", sx + 3, sy - hh + .5, hw, .85) }
+  if (ICON["cowboy-hat"]) { const hw = 15, hh = hw * ICON["cowboy-hat"].vb[3] / ICON["cowboy-hat"].vb[2]; icon("cowboy-hat", sx + 3, sy - hh + .5, hw, .85) }
 
   // string lights across the top, twinkling
   for (let i = 0; i < 18; i++) {

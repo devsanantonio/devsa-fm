@@ -188,7 +188,7 @@ const [PENGUIN, pw] = loadImg("penguin.png"); waits.push(pw)
 const [PYSA, yw] = loadImg("pysa-mascot-full.webp"); waits.push(yw)
 // the City of San Antonio's line icons, inked onto cards
 const ICONS = {}
-for (const n of ["tower", "alamo", "sanjose", "taco", "mission-bell", "concha", "jalapeno", "guitar", "cactus"]) waits.push(fetch(`icons/${n}.svg`).then(r => r.text()).then(svg => { ICONS[n] = svg }))
+for (const n of ["tower", "alamo", "sanjose", "taco", "mission-bell", "concha", "jalapeno", "guitar", "cactus"]) waits.push(fetch(`icons/${n}.svg`).then(r => r.ok ? r.text() : "", () => "").then(svg => { if (/viewBox=/.test(svg)) ICONS[n] = svg }))
 const INKED = {}
 function inked(n, colour) {
   const key = n + colour; if (INKED[key] || !ICONS[n]) return INKED[key]

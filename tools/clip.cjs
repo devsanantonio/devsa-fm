@@ -44,6 +44,7 @@ async function thisWeek() {
   ff.stdin.end(); await new Promise(r => ff.on('close', r)); await b.close()
 
   const mp4 = path.join(outDir, `devsa-fm-${name}-${SECONDS}s.mp4`), gif = path.join(outDir, `devsa-fm-${name}.gif`)
+  if (!fs.existsSync(song)) { fs.copyFileSync(silent, mp4); console.log(`no music at ${song} (it isn't in the repo): the clip is silent`) } else
   execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', silent, '-i', song, '-map', '0:v', '-map', '1:a', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
     '-af', `afade=t=in:d=1,afade=t=out:st=${SECONDS - 2.5}:d=2.5`, '-t', String(SECONDS), '-movflags', '+faststart', mp4])
   execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-t', String(GIF_S), '-i', silent, '-filter_complex',

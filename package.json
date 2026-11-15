@@ -1,15 +1,31 @@
 {
   "name": "devsa-fm",
   "version": "1.0.0",
-  "description": "A daily 2.5-hour YouTube livestream on @devsatx: music for San Antonio's learners and builders, over an ASCII room with the DEVSA mark as a pixel character nodding along.",
-  "main": "index.js",
+  "description": "A night in San Antonio, in ASCII, with Tejano lofi: DEVSA's livestream, and the scenes anyone can build for it.",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "preview": "node tools/preview.cjs",
+    "still": "node tools/still.cjs",
+    "clip": "node tools/clip.cjs"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "keywords": [
+    "ascii",
+    "canvas",
+    "livestream",
+    "lofi",
+    "san-antonio",
+    "creative-coding",
+    "devsa"
+  ],
+  "author": "DEVSA (devsa.community)",
+  "license": "MIT",
   "dependencies": {
     "puppeteer-core": "^24.43.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/devsanantonio/devsa-fm.git"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
