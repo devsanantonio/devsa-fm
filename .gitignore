@@ -17,7 +17,11 @@ music*/*.m4a
 # Copy them in locally (see README).
 scene/icons/*.svg
 scene/proj/groups/
+scene/xmas-logos/
 scene/proj/partners/
 scene/proj/models/
 social/video/*.mp4
 _site/
+
+# the devsa.community hero photos for the Marquee Plaza screen (copied from next-devsa/public/hero)
+scene/hero/

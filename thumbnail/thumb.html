@@ -9,6 +9,7 @@
   thumb.html?c  the >FM radio mark over the River Walk; ?d the mark over four scenes
   thumb.html?e  the >FM alt mark (one colour, like DEVSA's alt logo) over the night bus, as on devsa.community/fm
   thumb.html?f  the alt mark over San Fernando's projection show, for the night mix with its new scenes
+  thumb.html?g  the Christmas edition: the alt mark over movie night at Mission Marquee Plaza, "Where San Antonio Builds." on its screen
   Render with: node shot.cjs
 -->
 <style>
@@ -68,6 +69,14 @@
   #f .sub { font-size: 31px; line-height: 1.25; width: 560px }
   #f .new { margin-top: 22px; font-family: "Geist Mono"; font-weight: 700; font-size: 21px; letter-spacing: 2px; color: rgba(255,255,255,.88) }
   #f .new b { color: #0c0c0c; background: #ffcf6a; padding: 3px 9px 2px; margin-right: 12px; border-radius: 4px }
+  #g .frame { inset: 0; background-image: url(marquee-xmas-61.8.png); background-size: 1480px 833px; background-position: 120px -12px; background-color: #0c0c0c }
+  #g .shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(12,12,12,.98) 0%, rgba(12,12,12,.95) 36%, rgba(12,12,12,0) 54%), linear-gradient(0deg, rgba(12,12,12,.7), rgba(12,12,12,0) 22%) }
+  #g .copy { position: absolute; left: 60px; top: 40px }
+  #g .radio { display: block; height: 330px; margin-bottom: 22px }
+  #g .sub { font-size: 31px; line-height: 1.25; width: 560px }
+  #g .new { margin-top: 22px; font-family: "Geist Mono"; font-weight: 700; font-size: 21px; letter-spacing: 2px; color: rgba(255,255,255,.88) }
+  #g .new b { color: #fff; background: #d8343c; padding: 3px 9px 2px; margin-right: 12px; border-radius: 4px }
+  #g .tag { position: absolute; left: 60px; bottom: 46px; font-family: "Geist Mono"; font-weight: 700; font-size: 26px; letter-spacing: 3px; color: #ffcf6a }
   #f .tag { position: absolute; left: 60px; bottom: 46px; font-family: "Geist Mono"; font-weight: 700; font-size: 26px; letter-spacing: 3px; color: #ffcf6a }
   /* the DEVSA mark, as shipped, with the FM wordmark beside it (never the word DEVSA beside the mark) */
   .lockup { display: flex; align-items: flex-end; gap: 28px }
@@ -138,8 +147,17 @@
   </div>
   <div class="tag">devsa.community/fm</div>
 </div>
+<div id="g" hidden>
+  <div class="frame"></div><div class="shade"></div>
+  <div class="copy">
+    <img class="radio" src="devsa-fm-alt-mark.svg" alt="DEVSA FM">
+    <div class="sub">Lofi radio for San Antonio's<br>learners and builders</div>
+    <div class="new"><b>CHRISTMAS</b>Mission Marquee · River Walk · La Villita</div>
+  </div>
+  <div class="tag">devsa.community/fm</div>
+</div>
 <script>
-  const v = (location.search.match(/[abcdef]/) || ["a"])[0]
+  const v = (location.search.match(/[abcdefg]/) || ["a"])[0]
   document.getElementById(v).hidden = false
 </script>
 </body>

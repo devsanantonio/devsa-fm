@@ -1,0 +1,121 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  @font-face { font-family: "Geist Pixel"; src: url(../fonts/GeistPixel-Square.woff2) format("woff2"); }
+  html, body { margin: 0; background: #000 } canvas { display: block }
+</style></head>
+<body>
+<!--
+  DEVSA-style Christmas loops for the cathedral's light show. Each is a 4-second loop (60 frames at 15 fps,
+  the projection's rate), 800x682 like the other films, drawn in light on black: black throws no light, so only
+  the drawing lands on the stone. Pixel art in DEVSA's tab colours (teal, pink, orange) and gold.
+    luminarias  rows of paper-bag luminarias lighting one by one, then flickering
+    nochebuena  a pixel poinsettia blooming, turning slowly
+    papel       papel picado navideño: three banners with star, tree and bell cut-outs, swaying
+    terminal    a DEVSA terminal typing "feliz navidad" and "san antonio", pixel snow falling inside it
+    ornaments   three ornaments in the tab colours swinging, sparkling
+  Export: node export.cjs  (frames to ../proj/xmas-<name>/, GIFs to ~/Downloads/devsa-cathedral-projections/)
+-->
+<canvas id="c" width="800" height="682"></canvas>
+<script>
+const W = 800, H = 682, N = 60, TAU = Math.PI * 2
+const TEAL = "#00b2a9", PINK = "#ef426f", ORANGE = "#ff8200", GOLD = "#ffd343", CREAM = "#fff1d6"
+const g = document.getElementById("c").getContext("2d")
+const glow = (x, y, r, c) => { const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, c); gr.addColorStop(1, "rgba(0,0,0,0)"); g.fillStyle = gr; g.fillRect(x - r, y - r, 2 * r, 2 * r) }
+const rgba = (h, a) => { const n = parseInt(h.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})` }
+function spr(map, pal, x, y, px) { map.forEach((row, r) => [...row].forEach((ch, q) => { if (ch === "." || !pal[ch]) return; g.fillStyle = pal[ch]; g.fillRect(Math.round(x + q * px), Math.round(y + r * px), px, px) })) }
+const hash = (a, b) => { const s = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return s - Math.floor(s) }
+
+const FILMS = {
+  luminarias(f) {                                        // three rows, lighting left to right, then a candle flicker
+    const BAG = ["..BBBBBB..", ".BBBBBBBB.", ".BBLLLLBB.", ".BLLYYLLB.", ".BLYYYYLB.", ".BLLYYLLB.", ".BBLLLLBB.", ".BBBBBBBB.", ".BBBBBBBB.", "TTTTTTTTTT"]
+    const px = 8, rows = [[150, 5], [330, 6], [520, 7]], u = f / N
+    rows.forEach(([y, n], r) => {
+      const step = (W - 80) / n
+      for (let i = 0; i < n; i++) {
+        const order = (r * 7 + i) / 18, on = Math.min(1, Math.max(0, (u * 1.6 - order) * 5)) || (u > .85 ? 1 : 0)
+        const k = Math.max(on, u > .62 ? 1 : 0), flick = .85 + .15 * Math.sin(TAU * (3 + i % 3) * u + i + r)
+        const x = 40 + step * (i + .5) - 5 * px, bandC = [TEAL, PINK, ORANGE][(i + r) % 3]
+        if (k > 0) glow(x + 5 * px, y + 4 * px, 70, rgba(GOLD, .35 * k * flick))
+        spr(BAG, { B: rgba("#c9a26a", .25 + .5 * k), L: rgba("#ffd88a", .15 + .7 * k * flick), Y: rgba(CREAM, k * flick), T: rgba(bandC, .3 + .6 * k) }, x, y, px)
+      }
+    })
+  },
+  nochebuena(f) {                                        // a poinsettia: eight petals in pink, leaves in teal, a gold heart
+    const u = f / N, cx = W / 2, cy = H / 2, PX = 20, open = .75 + .25 * Math.sin(TAU * u)
+    glow(cx, cy, 300, rgba(PINK, .16))
+    g.save(); g.translate(cx, cy); g.rotate(TAU * u / 8)
+    const cells = new Set()
+    const petal = (a, len, w, col) => { for (let d = 2; d < len; d++) for (let s = -w; s <= w; s++) {
+      const ww = w * Math.sin(Math.PI * d / len); if (Math.abs(s) > ww) continue
+      const x = Math.round((Math.cos(a) * d - Math.sin(a) * s * .5)), y = Math.round((Math.sin(a) * d + Math.cos(a) * s * .5))
+      cells.add(x + "," + y + "," + col) } }
+    for (let i = 0; i < 8; i++) petal(i * TAU / 8 + TAU / 16, 15 * open, 4, "#2f9e4f")
+    for (let i = 0; i < 8; i++) petal(i * TAU / 8, 13 * open, 4, i % 2 ? PINK : "#d8343c")
+    for (const c of cells) { const [x, y, col] = c.split(","); g.fillStyle = col; g.fillRect(x * PX - PX / 2, y * PX - PX / 2, PX, PX) }
+    for (let i = 0; i < 7; i++) { const a = i * TAU / 7, r = (i % 2 ? 1 : 2) * PX; g.fillStyle = i % 2 ? ORANGE : GOLD; g.fillRect(Math.cos(a) * r - PX / 2, Math.sin(a) * r - PX / 2, PX, PX) }
+    g.fillStyle = GOLD; g.fillRect(-PX / 2, -PX / 2, PX, PX)
+    g.restore()
+  },
+  papel(f) {                                             // papel picado navideño: three banners on a string, swaying
+    const u = f / N, CUT = {
+      star: ["....#....", "....#....", "...###...", "#########", ".#######.", "..#####..", "..##.##..", ".##...##."],
+      tree: ["....#....", "...###...", "..#####..", "...###...", "..#####..", ".#######.", "#########", "....#...."],
+      bell: ["...###...", "..#####..", "..#####..", ".#######.", ".#######.", "#########", "....#...."] }
+    const lines = [[110, [PINK, TEAL, ORANGE, GOLD, PINK]], [320, [TEAL, ORANGE, PINK, TEAL, GOLD]], [530, [ORANGE, GOLD, TEAL, PINK, ORANGE]]]
+    lines.forEach(([y0, cols], li) => {
+      const sway = Math.sin(TAU * u + li) * 8
+      g.strokeStyle = "rgba(255,255,255,.5)"; g.lineWidth = 3; g.beginPath(); g.moveTo(0, y0); g.quadraticCurveTo(W / 2, y0 + 30 + sway, W, y0); g.stroke()
+      cols.forEach((c, i) => {
+        const x = 30 + i * 150, y = y0 + 6 + Math.sin(Math.PI * (x + 60) / W) * (22 + sway * .5), PX = 8, fw = 120, fh = 140
+        const tilt = Math.sin(TAU * u + i * .7 + li) * .05
+        g.save(); g.translate(x + fw / 2, y); g.rotate(tilt); g.translate(-fw / 2, 0)
+        g.fillStyle = c; g.fillRect(0, 0, fw, fh)
+        for (let k = 0; k < fw; k += 16) { g.fillStyle = "#000"; g.beginPath(); g.moveTo(k, fh); g.lineTo(k + 8, fh - 14); g.lineTo(k + 16, fh); g.fill() }   // the zigzag hem
+        const cut = CUT[["star", "tree", "bell"][(i + li) % 3]]
+        cut.forEach((row, r) => [...row].forEach((ch, q) => { if (ch === "#") { g.fillStyle = "#000"; g.fillRect(24 + q * PX, 22 + r * PX, PX, PX) } }))
+        for (let d = 0; d < 6; d++) { g.fillStyle = "#000"; g.fillRect(10 + d * 20, 8, 6, 6) }   // a row of little punches
+        g.restore()
+      })
+    })
+  },
+  terminal(f) {                                          // a DEVSA terminal window: types two lines, the cursor blinks, snow inside
+    const u = f / N, x0 = 70, y0 = 90, w = W - 140, h = H - 180
+    g.fillStyle = "#eeeeee"; g.fillRect(x0, y0, w, h)
+    ;[TEAL, PINK, ORANGE].forEach((c, i) => { g.fillStyle = c; g.fillRect(x0 + 12 + i * ((w - 24) / 3 + 4), y0 + 12, (w - 24) / 3 - 4, 26) })
+    g.fillStyle = "#000"; g.fillRect(x0 + 10, y0 + 50, w - 20, h - 60)
+    for (let i = 0; i < 40; i++) {                       // pixel snow inside the window
+      const sx = x0 + 20 + hash(i, 1) * (w - 40), sy = y0 + 60 + ((hash(i, 2) + u * (1 + i % 2)) % 1) * (h - 80)
+      g.fillStyle = `rgba(255,255,255,${.3 + .3 * (i % 2)})`; g.fillRect(Math.round(sx / 6) * 6, Math.round(sy / 6) * 6, 6, 6)
+    }
+    const L1 = "feliz navidad", L2 = "san antonio", typed = Math.floor(Math.min(1, u / .7) * (L1.length + L2.length + 2))
+    g.font = '64px "Geist Pixel"'; g.textBaseline = "top"
+    const a = L1.slice(0, Math.min(L1.length, typed)), b = typed > L1.length + 1 ? L2.slice(0, typed - L1.length - 1) : ""
+    g.fillStyle = TEAL; g.fillText(">", x0 + 50, y0 + 150); g.fillStyle = GOLD; g.fillText(a, x0 + 110, y0 + 150)
+    g.fillStyle = TEAL; g.fillText(">", x0 + 50, y0 + 260); g.fillStyle = CREAM; g.fillText(b, x0 + 110, y0 + 260)
+    const onB = typed > L1.length, cx = x0 + 110 + g.measureText(onB ? b : a).width + 8, cy = onB ? y0 + 260 : y0 + 150
+    if (Math.floor(u * 8) % 2 === 0 || u < .7) { g.fillStyle = PINK; g.fillRect(cx, cy + 50, 40, 10) }
+  },
+  ornaments(f) {                                         // three ornaments swinging on their strings, sparkles around them
+    const u = f / N, ORN = [".####.", "######", "######", "######", "######", ".####."], PX = 22
+    ;[[200, 300, TEAL, 0], [400, 380, PINK, .33], [600, 280, ORANGE, .66]].forEach(([x, len, c, ph]) => {
+      const a = Math.sin(TAU * (u + ph)) * .18, ex = x + Math.sin(a) * len, ey = Math.cos(a) * len
+      g.strokeStyle = "rgba(255,255,255,.6)"; g.lineWidth = 3; g.beginPath(); g.moveTo(x, 0); g.lineTo(ex, ey); g.stroke()
+      glow(ex, ey + 70, 150, rgba(c, .3))
+      g.fillStyle = GOLD; g.fillRect(ex - PX, ey, PX * 2, PX * .8)                                       // the cap
+      spr(ORN, { "#": c }, ex - 3 * PX, ey + PX * .8, PX)
+      g.fillStyle = "rgba(255,255,255,.7)"; g.fillRect(ex - 2 * PX, ey + 2 * PX, PX, PX)                 // a shine
+      g.fillStyle = GOLD; for (let k = 0; k < 6; k++) g.fillRect(ex - 3 * PX + k * PX, ey + 3.3 * PX, PX, PX * .5)   // a gold band
+    })
+    for (let i = 0; i < 18; i++) {                       // sparkles, twinkling a whole number of times a loop
+      const k = Math.max(0, Math.sin(TAU * (u * (1 + i % 3) + hash(i, 4)))); if (k < .4) continue
+      const x = hash(i, 5) * W, y = 80 + hash(i, 6) * (H - 160), s = 6 + 8 * k
+      g.fillStyle = rgba([GOLD, TEAL, PINK, ORANGE][i % 4], k); g.fillRect(x - s / 2, y - 2, s, 4); g.fillRect(x - 2, y - s / 2, 4, s)
+    }
+  },
+}
+window.FILMS = Object.keys(FILMS)
+window.draw = (name, f) => { g.fillStyle = "#000"; g.fillRect(0, 0, W, H); FILMS[name](f) }
+window.ready = document.fonts.load('64px "Geist Pixel"')
+</script>
+</body></html>

@@ -6,6 +6,7 @@
   @font-face { font-family: "Geist Mono"; font-weight: 700; src: url(fonts/GeistMono-Bold.woff2) format("woff2"); }
   @font-face { font-family: "Geist"; font-weight: 500; src: url(fonts/Geist-Medium.woff2) format("woff2"); }
   @font-face { font-family: "Geist"; font-weight: 900; src: url(fonts/Geist-Black.woff2) format("woff2"); }
+  @font-face { font-family: "Geist Pixel"; src: url(fonts/GeistPixel-Square.woff2) format("woff2"); }
   html, body { margin: 0; background: #0c0c0c; overflow: hidden }
   canvas { display: block }
 </style>
@@ -27,11 +28,23 @@
   The projection lights the stone's characters and the doors and belfry openings stay dark. Agents watch
   from folding chairs on the plaza, backs to us; Linux San Antonio's penguin rides by on a bicycle.
   1920x1080; the loop is fm.T long (synced to "Smooth Tech-jano" on stream).
+
+  ?xmas: the Christmas show. The same mapping (the stone lit, doors and belfry dark), with Christmas films in the
+  arch: the DEVSA mark, luminarias, a nochebuena, papel picado, ornaments, a DEVSA terminal (proj/xmas-*/, from
+  proj-xmas/films.html). Each film reaches the bell towers in a simpler form: luminarias climbing them, papel
+  picado strung across them, ornaments hanging from their cornices, nochebuenas blooming round the oculi, a
+  terminal's lines scrolling up them. Between films, one soft wipe: a bright line sweeping down the facade with
+  the new film's light behind it (the year-round show keeps its hatched sweeps). On the plaza a loose crowd stands
+  watching, seen from behind, the cast among them, a few holding up phones whose screens glow as they record; an
+  elf rides a reindeer across behind them; luminarias along the steps; pixel snow. No sleigh: the projection is
+  this scene's show. Footer: the DEVSA FM radio.
 -->
 <canvas id="c" width="1920" height="1080"></canvas>
 <script src="plush.js"></script>
 <script src="fmkit.js"></script>
+<script src="xmas-sprites.js"></script>
 <script>
+const XMAS = new URLSearchParams(location.search).has("xmas")
 const { W, H, TAU, CELL, COLS, ROWS, TEAL, PINK, ORANGE, ctx, g, LT, lerp, clamp01, ease, hash, glow, lit, hex, footer, loadImg } = fm
 const BRAND = [TEAL, PINK, ORANGE]
 
@@ -93,7 +106,7 @@ function paint(t) {
   let st = 9; const sr = () => (st = (st * 16807) % 2147483647) / 2147483647
   for (let i = 0; i < 46; i++) { g.fillStyle = fm.gray(.25 + .25 * sr() + .12 * Math.sin(TAU * 3 * t / LT + i)); g.fillRect(sr() * W, sr() * 420, CELL, CELL) }
   // the City's cloud icon, three of them drifting slowly across the upper sky
-  for (const [y, w, k, ph, v] of [[40, 260, 1, .1, .6], [150, 190, 2, .55, .48], [10, 150, 1, .8, .42]]) {
+  if (!XMAS) for (const [y, w, k, ph, v] of [[40, 260, 1, .1, .6], [150, 190, 2, .55, .48], [10, 150, 1, .8, .42]]) {
     const x = ((t / LT) * k + ph) % 1 * (W + 600) - 300
     g.setTransform(1, 0, 0, 1, 0, 0); fm.onGround("cloud", x / CELL, (y + w * .62) / CELL, w / CELL, v); g.setTransform(1 / CELL, 0, 0, 1 / CELL, 0, 0)   // icons are sized in cells
   }
@@ -218,7 +231,9 @@ const MASK = maskC.getContext("2d").getImageData(0, 0, COLS, ROWS).data
 const waits = []
 const img = src => { const [i, w] = loadImg(src); waits.push(w); return i }
 const seq = (dir, n) => Array.from({ length: n }, (_, k) => img(`proj/${dir}/${String(k + 1).padStart(3, "0")}.jpg`))
-const FILM = { mhth: seq("mhth", 188), pysa: seq("pysa", 107), ag: seq("ag", 128) }
+const FILM = XMAS ? {} : { mhth: seq("mhth", 188), pysa: seq("pysa", 107), ag: seq("ag", 128) }
+// Christmas: DEVSA-style loops (scene/proj-xmas/films.html exports them to proj/xmas-*/, 60 frames each)
+const XFILM = XMAS ? Object.fromEntries(["luminarias", "nochebuena", "papel", "terminal", "ornaments"].map(n => [n, seq("xmas-" + n, 60)])) : {}
 const frameOf = (film, sec) => film[Math.floor(sec * 15) % film.length]
 const MARK = img("devsa-alt-logo.svg")
 // The Model's mascot: the Claude Code mark, as The Model's site draws it
@@ -334,9 +349,19 @@ const FILMS = [
     p.restore()
   } },
 ]
+// --- ?xmas: the Christmas segments ------------------------------------------------------------------
+const XFILMS = [                                        // each in the arch, like the year-round films
+  FILMS[0],                                              // the DEVSA mark opens the show, as always
+  { len: 24, draw: (u, sec) => cover(XFILM.luminarias, sec, 960) },
+  { len: 24, draw: (u, sec) => cover(XFILM.nochebuena, sec, 960) },
+  { len: 24, draw: (u, sec) => cover(XFILM.papel, sec, 960) },
+  { len: 24, draw: (u, sec) => cover(XFILM.ornaments, sec, 960) },
+  { len: 24, draw: (u, sec) => cover(XFILM.terminal, sec, 960) },
+]
 const SCHEDULE = (() => {                                 // the films fill the loop, stretched or squeezed to its length
-  const total = FILMS.reduce((n, f) => n + f.len, 0), k = fm.T / total
-  let at = 0; return FILMS.map(f => { const s = { at, len: f.len * k, draw: f.draw, framed: f.framed }; at += f.len * k; return s })
+  const SHOW = XMAS ? XFILMS : FILMS
+  const total = SHOW.reduce((n, f) => n + f.len, 0), k = fm.T / total
+  let at = 0; return SHOW.map(f => { const s = { at, len: f.len * k, draw: f.draw, framed: f.framed }; at += f.len * k; return s })
 })()
 
 function projection(t) {
@@ -351,7 +376,8 @@ function projection(t) {
   const inFront = ease(clamp01(local / 2.2)) * 1.35                        // the wash arriving from the left
   const outFront = ease(clamp01((local - (s.len - OUT)) / OUT)) * 1.35    // and the one that clears the film
   const wash = local < INTRO + .8 ? 1 - clamp01((local - INTRO + .2) / 1.2) * .8 : local > s.len - OUT ? 1 : .2
-  SWEEP = [c, wash, local > s.len - OUT ? outFront : Math.max(inFront, local > INTRO ? 1.35 : 0), filmA > .05 && s.framed !== false]
+  SWEEP = XMAS ? null : [c, wash, local > s.len - OUT ? outFront : Math.max(inFront, local > INTRO ? 1.35 : 0), filmA > .05 && s.framed !== false]
+  if (XMAS) towers(i, local, s.len, filmA)                                  // each film's simpler form on the bell towers
   if (filmA > 0) {
     p.save(); p.globalAlpha = filmA
     if (s.framed !== false) {
@@ -361,10 +387,70 @@ function projection(t) {
     } else s.draw(local / s.len, local)
     p.restore()
   }
+  if (XMAS) wipe(local)
   sp.clearRect(0, 0, COLS, ROWS); sp.drawImage(pj, 0, 0, COLS, ROWS)
   return sp.getImageData(0, 0, COLS, ROWS).data
 }
 
+// --- ?xmas: the wipe between films, and the films on the towers -------------------------------------------
+// one soft wipe as each segment begins: a bright line sweeps down the facade; above it the new light, below it
+// the building still dark from the change
+const WIPE = 1.8
+function wipe(local) {
+  if (local > WIPE) return
+  const u = ease(local / WIPE), y = lerp(TOP - 60, GROUND + 10, u)
+  p.save(); p.clip(FACADE)
+  p.globalAlpha = .88 * (1 - u * .15); p.fillStyle = "#000"; p.fillRect(0, y, W, GROUND - y + 20)
+  const gl = p.createLinearGradient(0, y - 70, 0, y); gl.addColorStop(0, "rgba(255,240,210,0)"); gl.addColorStop(1, "rgba(255,240,210,.55)")
+  p.globalAlpha = 1; p.fillStyle = gl; p.fillRect(0, y - 70, W, 70)
+  p.fillStyle = "#fff4dc"; p.fillRect(0, y - 3, W, 6)
+  p.restore()
+}
+const TOWERS = [[LT0, LT1], [RT0, RT1]]
+function towers(i, local, len, a) {
+  if (a <= .02 || i <= 0) return
+  const kind = ["", "luminarias", "nochebuena", "papel", "ornaments", "terminal"][i], u = local / len
+  p.save(); p.clip(FACADE); p.globalCompositeOperation = "lighter"; p.globalAlpha = a
+  for (const [x0, x1] of TOWERS) {
+    const w = x1 - x0, cx = (x0 + x1) / 2
+    if (kind === "luminarias") {                          // rows of candlelit bags climbing the tower as the film plays
+      const rows = Math.floor(lerp(2, 12, clamp01(u * 1.6)))
+      for (let r = 0; r < rows; r++) for (let k = 0; k < 2; k++) {                         // two columns, up the tower's edges
+        const x = k ? x1 - 34 : x0 + 34, y = GROUND - 30 - r * 52, fl = .75 + .25 * Math.sin(local * 6 + r + k * 2)
+        p.fillStyle = `rgba(255,180,90,${(.5 * fl).toFixed(3)})`; p.beginPath(); p.arc(x, y, 18, 0, TAU); p.fill()
+        p.fillStyle = `rgba(255,232,170,${(.8 * fl).toFixed(3)})`; p.fillRect(x - 7, y - 4, 14, 14)
+      }
+    }
+    if (kind === "papel") {                               // strings of papel picado across each tower at three heights, swaying
+      for (const [k, yy] of [[0, fy(560)], [1, fy(980)], [2, fy(1380)]]) for (let f = 0; f < 5; f++) {
+        const fx0 = x0 + 8 + f * (w - 16) / 5, fw = (w - 16) / 5 - 8, sw = Math.sin(local * 2 + f + k) * 3
+        p.fillStyle = [TEAL, PINK, ORANGE, xs.GOLD, "#f4efe6"][(f + k) % 5]; p.beginPath()
+        p.moveTo(fx0, yy); p.lineTo(fx0 + fw, yy); p.lineTo(fx0 + fw + sw, yy + 52); for (let z = 4; z >= 0; z--) p.lineTo(fx0 + sw + fw * z / 4, yy + 52 + (z % 2) * 8); p.closePath(); p.fill()
+        p.fillStyle = "#000"; p.fillRect(fx0 + fw / 2 - 7 + sw / 2, yy + 16, 14, 14)
+      }
+    }
+    if (kind === "ornaments") {                           // baubles hanging from the cornice on strings, swinging
+      for (let k = 0; k < 5; k++) {
+        const ax = x0 + w * (k + .5) / 5, L = 90 + 70 * hash(k, x0), sw = Math.sin(local * 1.6 + k * 1.3) * .12
+        const bx = ax + Math.sin(sw) * L, by = TOP + 20 + Math.cos(sw) * L, c = [TEAL, PINK, ORANGE, xs.GOLD, "#e8323c"][k]
+        p.strokeStyle = "rgba(244,239,230,.6)"; p.lineWidth = 2; p.beginPath(); p.moveTo(ax, TOP + 20); p.lineTo(bx, by); p.stroke()
+        p.fillStyle = c; p.beginPath(); p.arc(bx, by + 22, 22, 0, TAU); p.fill(); p.fillStyle = "rgba(255,255,255,.6)"; p.beginPath(); p.arc(bx - 7, by + 15, 6, 0, TAU); p.fill()
+      }
+    }
+    if (kind === "nochebuena") {                          // nochebuenas blooming round the tower's oculus
+      const [ox, oy] = OCULI[x0 < 960 ? 0 : 1]
+      for (let k = 0; k < 6; k++) { const a0 = k / 6 * TAU + local * .2, bx = ox + Math.cos(a0) * (OCULUS_R + 46), by = oy + Math.sin(a0) * (OCULUS_R + 46), bl = clamp01(u * 3 - k * .15)
+        p.fillStyle = "#e8323c"; for (let q = 0; q < 5; q++) { const aa = q / 5 * TAU; p.beginPath(); p.ellipse(bx + Math.cos(aa) * 12 * bl, by + Math.sin(aa) * 12 * bl, 12 * bl, 5 * bl, aa, 0, TAU); p.fill() }
+        p.fillStyle = xs.GOLD; p.beginPath(); p.arc(bx, by, 4 * bl, 0, TAU); p.fill() }
+    }
+    if (kind === "terminal") {                            // a terminal's lines scrolling up the tower, the tab bar at its top
+      ;[TEAL, PINK, ORANGE].forEach((c, k) => { p.fillStyle = c; p.fillRect(x0 + 10 + k * (w - 20) / 3, TOP + 10, (w - 20) / 3 - 6, 10) })
+      for (let r = 0; r < 14; r++) { const y = GROUND - ((local * 40 + r * 44) % (GROUND - TOP - 40)), len = (w - 40) * (.3 + .6 * hash(r, x0))
+        p.fillStyle = r % 4 === 0 ? TEAL : "rgba(220,240,235,.7)"; p.fillRect(x0 + 20, y, len, 6) }
+    }
+  }
+  p.restore()
+}
 // --- the plaza's people -------------------------------------------------------------------------
 const PENGUIN = img("penguin.png")
 // The audience: agents in folding chairs on the plaza, backs to us, watching the show, as people do on Main
@@ -388,6 +474,39 @@ function chair(x, front) {                                         // a folding 
   }
   ctx.restore()
 }
+// Christmas: a loose standing crowd on the plaza, seen from behind, the cast among them; a few hold phones up,
+// their screens glowing with the facade's light. Two rows; the near row larger and darker.
+const ELF_BACK = xs.ELF.slice(0, 15).map((row, r) => r === 6 ? "..S.hhhhhh.S.." : r === 7 ? "..ShhhhhhhhS.." : r === 8 ? "....hhhhhh...." : r === 11 ? "..EEEEEEEEEE.." : row)
+const CROWD = [                                          // [x, row, who]: "p" a person, "pp" one with a phone up, or a cast member
+  [190, 0, "p"], [300, 0, "pp"], [390, 0, "e:" + PINK], [470, 0, "p"], [560, 0, "a:" + TEAL], [650, 0, "p"], [1270, 0, "p"], [1350, 0, "pp"],
+  [1440, 0, "e:" + TEAL], [1530, 0, "p"], [1620, 0, "a:" + ORANGE], [1720, 0, "p"],
+  [250, 1, "p"], [420, 1, "a:" + PINK], [540, 1, "pp"], [1380, 1, "p"], [1500, 1, "e:" + ORANGE], [1660, 1, "pp"]]
+function crowd(t, PJ) {
+  const k = (60 * COLS + 80) * 4, spill = [PJ[k] || 120, PJ[k + 1] || 120, PJ[k + 2] || 140]
+  for (const row of [0, 1]) for (const [x, r, who] of CROWD) {
+    if (r !== row) continue
+    const sc = row ? 1.25 : 1, base = row ? 1086 : 1008, sway = Math.sin(t * .7 + x) * 2
+    if (who.startsWith("e:")) { const px = 5.2 * sc, [w, h] = xs.size(ELF_BACK, px)
+      xs.spr(ctx, ELF_BACK, { ...xs.PAL, E: who.slice(2), S: "#c2875a", s: "#a06c44", h: "#2a1a12" }, x - w / 2 + sway, base - h - 20 * sc, px); continue }
+    if (who.startsWith("a:")) { drawPlush(ctx, { x: x + sway, y: base - 10, s: .95 * sc, tint: who.slice(2), number: "", t, back: true, seed: x % 13 }); continue }
+    // a person: head and shoulders from behind, dark, lit along the top by the show
+    const hx = x + sway, hy = base - 118 * sc
+    ctx.fillStyle = row ? "#0e0f13" : "#16171c"
+    ctx.beginPath(); ctx.roundRect(hx - 34 * sc, hy + 26 * sc, 68 * sc, 120 * sc, 22 * sc); ctx.fill()
+    ctx.beginPath(); ctx.arc(hx, hy + 6 * sc, 18 * sc, 0, TAU); ctx.fill()
+    ctx.strokeStyle = `rgba(${spill[0]},${spill[1]},${spill[2]},.55)`; ctx.lineWidth = 2
+    ctx.beginPath(); ctx.arc(hx, hy + 6 * sc, 18 * sc, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke()
+    ctx.beginPath(); ctx.moveTo(hx - 30 * sc, hy + 34 * sc); ctx.quadraticCurveTo(hx, hy + 22 * sc, hx + 30 * sc, hy + 34 * sc); ctx.stroke()
+    if (who === "pp") {                                   // an arm up, a phone recording the show, its screen lit
+      const px = hx + 26 * sc, py = hy - 30 * sc
+      ctx.strokeStyle = row ? "#0e0f13" : "#16171c"; ctx.lineWidth = 12 * sc; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(hx + 26 * sc, hy + 40 * sc); ctx.lineTo(px, py + 18 * sc); ctx.stroke()
+      ctx.fillStyle = "#0b0b0d"; ctx.fillRect(px - 11 * sc, py - 18 * sc, 22 * sc, 36 * sc)
+      ctx.fillStyle = `rgb(${Math.min(255, spill[0] + 60)},${Math.min(255, spill[1] + 60)},${Math.min(255, spill[2] + 60)})`; ctx.fillRect(px - 9 * sc, py - 16 * sc, 18 * sc, 32 * sc)
+      lit(() => glow(px, py, 34 * sc, 34 * sc, `rgba(${spill[0]},${spill[1]},${spill[2]},.35)`))
+      if (Math.floor(t * 2) % 2) { ctx.fillStyle = "#ff3b30"; ctx.beginPath(); ctx.arc(px + 5 * sc, py - 12 * sc, 2.4 * sc, 0, TAU); ctx.fill() }   // recording
+    }
+  }
+}
 function audience(t) {
   const c = t % fm.T, beat = fm.pulseAt(t)
   const since = Math.min(...SCHEDULE.map(s => (c - s.at + fm.T) % fm.T))             // seconds since a film began
@@ -401,7 +520,17 @@ function audience(t) {
     chair(x, true)
   }
 }
+function reindeerRide(t) {                               // Christmas: an elf rides a reindeer across the plaza
+  const cyc = (t % (LT / 2)), p01 = cyc / 9; if (p01 <= 0 || p01 >= 1) return
+  const x = lerp(-200, W + 200, p01), y = 990, px = 7, leap = Math.floor(t * 6) % 2 === 1
+  const [dw, dh] = xs.size(xs.DEER, px), bob = leap ? -2 * px : 0
+  lit(() => glow(x + dw * .4, y - dh * .55 + bob, 14, 14, fm.rgba(PINK, .7)))
+  xs.spr(ctx, leap ? xs.DEER_LEAP : xs.DEER, { ...xs.PAL, N: PINK }, x - dw / 2, y - dh + bob, px)
+  const [ew, eh] = xs.size(xs.ELF, px * .8)
+  xs.spr(ctx, xs.ELF, xs.PAL, x - dw / 2 + 4 * px, y - dh + bob - eh + 7 * px, px * .8)
+}
 function bicycle(t) {
+  if (XMAS) return reindeerRide(t)
   const cyc = (t % (LT / 2)), p01 = cyc / 7; if (p01 <= 0 || p01 >= 1) return            // across in 7 s, twice a minute
   const x = lerp(-260, W + 260, p01), y = 918, R = 46, spin = t * 14
   ctx.save(); ctx.strokeStyle = "#e5e5e5"; ctx.lineWidth = 5
@@ -417,6 +546,98 @@ function bicycle(t) {
     ctx.imageSmoothingEnabled = false; ctx.drawImage(PENGUIN, x - 28 - w / 2, y - R - 54 - h + bob, w, h); ctx.imageSmoothingEnabled = true }
   ctx.restore()
 }
+// --- ?xmas: the plaza ----------------------------------------------------------------------------------
+const XC = [TEAL, PINK, ORANGE, xs.GOLD]
+function xPlazaTree(t) {                                 // a tall pixel tree where the left canopy stood, lit on the beat
+  const cx = 170, base = 990, P = 14, beat = fm.pulseAt(t)
+  ctx.fillStyle = "#5e3b24"; ctx.fillRect(cx - 2 * P, base - 4 * P, 4 * P, 4 * P)
+  let y = base - 4 * P
+  for (const [hw, rows] of [[9, 7], [7, 7], [5, 6], [3, 5]]) {
+    for (let r = 0; r < rows; r++) {
+      const half = Math.round(hw * (1 - r / rows * .55))
+      for (let c = -half; c <= half; c++) {
+        const v = hash(c, r + hw); ctx.fillStyle = Math.abs(c) === half ? "#2fa65a" : v > .6 ? "#1f7a41" : "#16603a"
+        ctx.fillRect(cx + c * P - P / 2, y - (r + 1) * P, P, P)
+        if (Math.abs(c) < half && (c * 7 + r * 3 + hw) % 5 === 0) {
+          const col = XC[(c + r + hw + 40) % 4], on = .5 + .5 * Math.max(beat, Math.sin(t * 3 + c + r) ** 2)
+          lit(() => glow(cx + c * P, y - (r + .5) * P, 14, 14, fm.rgba(col, .5 * on)))
+          ctx.fillStyle = col; ctx.globalAlpha = .55 + .45 * on; ctx.fillRect(cx + c * P - 4, y - (r + .5) * P - 4, 8, 8); ctx.globalAlpha = 1
+        }
+      }
+    }
+    y -= rows * P - P
+  }
+  const STAR = ["...#...", "..###..", "#######", ".#####.", "..#.#.."]
+  lit(() => glow(cx, y - 3 * P, 60, 60, `rgba(255,211,67,${.3 + .3 * beat})`))
+  ctx.fillStyle = xs.GOLD; STAR.forEach((row, ry) => [...row].forEach((ch, rx) => { if (ch === "#") ctx.fillRect(cx + (rx - 3.5) * 8, y - 6 * P + ry * 8, 8, 8) }))
+}
+function xLuminarias(t) {                                // paper bags with candles along the cathedral's steps
+  for (let x = LT0; x <= RT1; x += 48) {
+    const fl = .8 + .2 * Math.sin(t * 7 + x)
+    lit(() => glow(x, GROUND - 2, 26, 18, `rgba(255,190,110,${.45 * fl})`))
+    ctx.fillStyle = "#e9cf9a"; ctx.fillRect(x - 8, GROUND - 14, 16, 14); ctx.fillStyle = "#f7e3b5"; ctx.fillRect(x - 8, GROUND - 14, 16, 3)
+  }
+}
+function xStrands(t) {                                   // string lights across the plaza, lamp to lamp and out to the trees
+  const step = Math.floor(t * 4)
+  for (const [x0, y0, x1, y1, sag] of [[330, 702, 1565, 702, 150], [0, 560, 330, 702, 50], [1565, 702, W, 560, 50]]) {
+    ctx.strokeStyle = "rgba(255,255,255,.22)"; ctx.lineWidth = 1.5; ctx.beginPath()
+    const at = u => [lerp(x0, x1, u), lerp(y0, y1, u) + Math.sin(u * Math.PI) * sag]
+    for (let i = 0; i <= 40; i++) { const [x, y] = at(i / 40); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y) } ctx.stroke()
+    const n = Math.round(Math.hypot(x1 - x0, y1 - y0) / 34)
+    for (let i = 1; i < n; i++) {
+      const [x, y] = at(i / n), col = XC[(i + Math.round(x0)) % 4], on = (i + step) % 4 === 0 ? 1 : .55
+      lit(() => glow(x, y + 5, 14, 14, fm.rgba(col, .4 * on)))
+      ctx.fillStyle = col; ctx.globalAlpha = .6 + .4 * on; ctx.beginPath(); ctx.arc(x, y + 5, 4.5, 0, TAU); ctx.fill(); ctx.globalAlpha = 1
+    }
+  }
+}
+const XFLAKE = ["...#...", "#..#..#", ".#.#.#.", "..###..", "#######", "..###..", ".#.#.#.", "#..#..#", "...#..."]
+const XFLAKES = Array.from({ length: 80 }, (_, i) => {
+  const kind = i % 10 < 6 ? 0 : i % 10 < 9 ? 1 : 2
+  return { x: hash(i, 31) * W, ph: hash(i, 32), laps: kind === 2 ? 1 : 2, sw: 10 + hash(i, 33) * 30, kind, px: [4, 2, 4][kind], a: [.5, .6, .85][kind] }
+})
+function xSnow(t) {                                      // pixel snow: the desk's six-armed flake and specks, seamless
+  for (const f of XFLAKES) {
+    const h = f.kind ? 9 * f.px : f.px, k = ((t / fm.T) * f.laps + f.ph) % 1, y = -h + k * (H + 2 * h)
+    const x = Math.round((f.x + Math.sin(TAU * f.laps * t / fm.T + f.ph * 6) * f.sw) / f.px) * f.px, yy = Math.round(y / f.px) * f.px
+    ctx.fillStyle = `rgba(255,255,255,${f.a})`
+    if (!f.kind) { ctx.fillRect(x, yy, f.px, f.px); continue }
+    XFLAKE.forEach((row, ry) => [...row].forEach((c, rx) => { if (c === "#") ctx.fillRect(x + rx * f.px, yy + ry * f.px, f.px, f.px) }))
+  }
+}
+// Santa's sleigh, once a loop, behind the bell towers: drawn offscreen, the facade cut out of it, then laid on
+const sk = document.createElement("canvas"); sk.width = W; sk.height = H; const skc = sk.getContext("2d")
+const XS_AT = .55, XS_DUR = 14, XS_PX = 4, XS_TEAM = 4, XS_GAP = .03
+function xSleigh(t) {
+  const u = ((t % fm.T) - fm.T * XS_AT) / XS_DUR; if (u < 0 || u > 1) return
+  const at = v => [lerp(-500, W + 500, v), 280 - 12 * Math.sin(v * Math.PI) + 8 * Math.sin(v * TAU * 3)]   // low enough to show in the gap between the towers
+  skc.clearRect(0, 0, W, H); skc.globalCompositeOperation = "source-over"
+  const [x, y] = at(u)
+  skc.save(); skc.globalCompositeOperation = "lighter"
+  for (let k = 1; k <= 30; k++) { const uu = u - k * .006; if (uu < 0) break
+    const [sx, sy] = at(uu), a = (1 - k / 30) * (.5 + .5 * Math.sin(t * 9 + k)), c = [xs.GOLD, TEAL, xs.GOLD, PINK, xs.GOLD, ORANGE][k % 6]
+    skc.fillStyle = fm.rgba(c, .9 * a); skc.fillRect(Math.round(sx / 4) * 4, Math.round((sy - 24) / 4) * 4, 4, 4) }
+  skc.restore()
+  skc.strokeStyle = "rgba(255,211,67,.55)"; skc.lineWidth = 1.5; skc.beginPath(); skc.moveTo(x + 12 * XS_PX, y - 8 * XS_PX)
+  for (let k = 1; k <= XS_TEAM; k++) { const [rx, ry] = at(Math.min(1, u + k * XS_GAP)); skc.lineTo(rx, ry - 9 * XS_PX) } skc.stroke()
+  for (let k = XS_TEAM; k >= 1; k--) {
+    const [rx, ry] = at(Math.min(1, u + k * XS_GAP)), [w, h] = xs.size(xs.DEER, XS_PX), leap = Math.floor(t * 6 + k * .5) % 2 === 1
+    xs.spr(skc, leap ? xs.DEER_LEAP : xs.DEER, { ...xs.PAL, N: xs.NOSE[k % 3] }, rx - w / 2, ry - h + (leap ? -2 * XS_PX : 0), XS_PX)
+  }
+  const [sw, sh] = xs.size(xs.SLEIGH, XS_PX)
+  xs.spr(skc, xs.SACK, xs.PAL, x - sw / 2 - 2 * XS_PX, y - sh - 7 * XS_PX, XS_PX)
+  xs.spr(skc, xs.SANTA_SEATED, xs.PAL, x - sw / 2 + 10 * XS_PX, y - sh - 13 * XS_PX, XS_PX)
+  xs.spr(skc, xs.SLEIGH, xs.PAL, x - sw / 2, y - sh, XS_PX)
+  skc.globalCompositeOperation = "destination-out"; skc.fill(FACADE)          // the towers stand in front of it
+  skc.globalCompositeOperation = "source-over"
+  ctx.drawImage(sk, 0, 0)
+}
+if (XMAS) {
+  const BPM = (window.BEATS && window.BEATS.bpm) || 76
+  window.FOOTER_SPRITE = (x, bottom, t) => { xs.radio(ctx, x, bottom - xs.RADIO.length * 3, 3, ((t * BPM / 60) / 4) % 1); return 26 * 3 }
+}
+
 let MARK_AT = null
 function render(t) {
   paint(t)
@@ -445,11 +666,13 @@ function render(t) {
     for (const x of [330, 1560]) glow(x + 5, 698, 120, 90, "rgba(255,230,180,.4)")
     const k = (60 * COLS + 80) * 4; glow(960, GROUND + 50, 760, 90, `rgba(${PJ[k]},${PJ[k + 1]},${PJ[k + 2]},.4)`)   // spill on the plaza
   })
+  if (XMAS) xLuminarias(t)
   bicycle(t)
-  audience(t)
+  if (XMAS) crowd(t, PJ); else audience(t)
+  if (XMAS) xSnow(t)
   footer(t)
 }
-fm.start(render, [...waits, fm.loadIcons(["cloud"]), document.fonts.load('900 40px "Geist"')])
+fm.start(render, [...waits, fm.loadIcons(["cloud"]), document.fonts.load('900 40px "Geist"'), ...(XMAS ? [document.fonts.load('100px "Geist Pixel"')] : [])])
 </script>
 </body>
 </html>

@@ -1,0 +1,81 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: "Geist Mono"; font-weight: 700; src: url(fonts/GeistMono-Bold.woff2) format("woff2"); }
+  @font-face { font-family: "Geist"; font-weight: 500; src: url(fonts/Geist-Medium.woff2) format("woff2"); }
+  html, body { margin: 0; background: #05060a; overflow: hidden }
+  canvas { display: block }
+</style>
+</head>
+<body>
+<!--
+  DEVSA FM, the tree: the DEVSA Christmas tree from the DEVSA TV desk, on its own, the star of the scene.
+  Ten terminal windows (the DEVSA window on top, nine evergreen ones with >_ faces and their tabs as
+  blinking lights), a gold star, a trunk, standing in a snowdrift. The snow is ASCII: flakes painted
+  into the grey layer, so they fall as characters, the big ones in the desk's six-armed snowflake shape,
+  at three depths. The lights blink and the star brightens on the beat. Seamless over fm.T (60 s).
+-->
+<canvas id="c" width="1920" height="1080"></canvas>
+<script src="fmkit.js"></script>
+<script src="xmas-sprites.js"></script>
+<script>
+const { W, H, TAU, CELL, TEAL, PINK, ORANGE, ctx, g, T, lerp, hash, glow, lit, footer } = fm
+
+const CX = W / 2, BASE = 968, PX = 8.2        // the tree stands on BASE, centred
+const DRIFT = y0 => x => y0 - 26 * Math.exp(-(((x - CX) / 420) ** 2)) - 10 * Math.sin(x / 140)   // the snowdrift's top
+
+// ---- the world, in greys: ASCII snow -----------------------------------------------------------
+const FLAKE = ["...#...", "#..#..#", ".#.#.#.", "..###..", "#######", "..###..", ".#.#.#.", "#..#..#", "...#..."]
+const SMALL = [".#.", "###", ".#."]
+// three depths: far (single cells, dim, slow), middle (the small cross), near (the six-armed flake, bright)
+const FLAKES = [
+  ...Array.from({ length: 90 }, (_, i) => ({ shape: null, v: .28 + .16 * hash(i, 1), laps: 1, sway: 10, x: hash(i, 2) * W, ph: hash(i, 3) })),
+  ...Array.from({ length: 34 }, (_, i) => ({ shape: SMALL, v: .5 + .2 * hash(i, 4), laps: 2, sway: 24, x: hash(i, 5) * W, ph: hash(i, 6) })),
+  ...Array.from({ length: 12 }, (_, i) => ({ shape: FLAKE, v: .85, laps: 2, sway: 40, x: hash(i, 7) * W, ph: hash(i, 8) })),
+]
+function paint(t) {
+  g.setTransform(1, 0, 0, 1, 0, 0)          // the grey layer at one pixel per character cell
+  g.fillStyle = fm.gray(0); g.fillRect(0, 0, W / CELL, H / CELL)
+  for (const f of FLAKES) {
+    const h = f.shape ? f.shape.length : 1, rows = H / CELL + 2 * h
+    const k = ((t / T) * f.laps + f.ph) % 1, y = Math.round(-h + k * rows)
+    const x = Math.round((f.x + Math.sin(TAU * f.laps * t / T + f.ph * 6) * f.sway) / CELL)
+    g.fillStyle = fm.gray(f.v)
+    if (!f.shape) { g.fillRect(x, y, 1, 1); continue }
+    f.shape.forEach((row, ry) => [...row].forEach((c, rx) => { if (c === "#") g.fillRect(x + rx - (row.length >> 1), y + ry, 1, 1) }))
+  }
+  // the snowdrift the tree stands in: a soft mound, densest at its crest
+  for (let x = 0; x < W / CELL; x++) {
+    const top = Math.round(DRIFT(BASE + 18)(x * CELL) / CELL)
+    for (let y = top; y < H / CELL; y++) { g.fillStyle = fm.gray(y === top ? .75 : .48 - .02 * (y - top)); g.fillRect(x, y, 1, 1) }
+  }
+}
+
+// ---- in colour: the tree ----------------------------------------------------------------------
+function tree(t) {
+  const beat = fm.pulseAt(t)
+  lit(() => {
+    glow(CX, BASE - 330, 520, 470, "rgba(52,181,108,.10)")                  // the evergreen glow
+    glow(CX, BASE - 330, 300, 300, `rgba(255,211,67,${.04 + .05 * beat})`)  // a warm breath on the beat
+  })
+  // the snowdrift's crest passes in front of the trunk, so the tree stands in the snow, not on it
+  const { top } = xs.devsaTree(ctx, CX, BASE, PX, t, T)
+  lit(() => glow(CX, top + 5 * PX, 120, 120, `rgba(255,211,67,${.28 + .35 * beat})`))
+}
+
+// ---- the DEVSA FM radio in the footer, notes on the beat --------------------------------------
+const BPM = (window.BEATS && window.BEATS.bpm) || 76
+window.FOOTER_SPRITE = (x, bottom, t) => { xs.radio(ctx, x, bottom - xs.RADIO.length * 3, 3, ((t * BPM / 60) / 4) % 1) }
+
+function render(t) {
+  paint(t)
+  fm.ascii("#05060a")
+  tree(t)
+  footer(t)
+}
+fm.start(render)
+</script>
+</body>
+</html>

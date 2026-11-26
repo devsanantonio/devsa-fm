@@ -16,15 +16,19 @@
   string lights on the roof, the City of San Antonio's taco and concha icons chalked on its menu
   board. At a folding table on the sidewalk, Linux San Antonio's penguin is on a laptop,
   shipping something; the Tower of the Americas behind, a cactus by the curb.
+  ?xmas: the truck wrapped in chasing lights and a wreath, ESPECIAL NAVIDEÑO conchas on the board, tacos and tamales, pixel snow,
+  the FM radio in the footer, and the penguin building an MCP server for DEVSA's calendar, asking an agent (fx) what's on.
   1920x1080, a seamless T-second loop: render(t) draws a frame.
 -->
 <canvas id="c" width="1920" height="1080"></canvas>
 <script src="plush.js"></script>
+<script src="xmas-sprites.js"></script>
 <script>
 // synced (render.cjs SYNC=...): the loop is the song, with the song inside it. One feature gets
 // shipped per song (a new localhost:210 starter for the City's 311 data), from the first branch
 // to "shipped" as the song ends; the string lights pulse on
 // its real beat. The scenery's own motions run on a ~60 s cycle, a whole number per loop (LT).
+const XMAS = new URLSearchParams(location.search).has("xmas")   // Christmas: the truck wrapped in lights, tamales on the board
 const B = window.BEATS || null
 const T = window.LOOP_T || 60, W = 1920, H = 1080, TAU = Math.PI * 2
 const LT = T / Math.max(1, Math.round(T / 60))
@@ -85,13 +89,16 @@ function paint(t) {
     box(x, y, 1, 1, .28 + .3 * sr() + .16 * Math.sin(TAU * k * t / LT + ph))
   }
   // a crescent moon, as over the River Walk
-  g.fillStyle = gray(.95); g.beginPath(); g.arc(40, 8, 3.6, 0, TAU); g.fill()
-  g.fillStyle = gray(.03); g.beginPath(); g.arc(41.6, 7, 3.4, 0, TAU); g.fill()
+  if (!XMAS) {                                                        // Christmas skies are left to the snow
+    g.fillStyle = gray(.95); g.beginPath(); g.arc(40, 8, 3.6, 0, TAU); g.fill()
+    g.fillStyle = gray(.03); g.beginPath(); g.arc(41.6, 7, 3.4, 0, TAU); g.fill()
+  }
   // downtown behind: dim blocks, a few windows still lit at midnight
   for (const [x, top, w] of [[0, 40, 14], [15, 34, 10], [26, 44, 12], [40, 30, 9], [50, 38, 14], [66, 42, 10], [78, 36, 12], [92, 46, 16], [130, 40, 12], [143, 33, 17]]) {
     box(x, top, w, GROUND - top, .1)
     for (let y = top + 2; y < GROUND - 8; y += 3) for (let xx = x + 1; xx < x + w - 1; xx += 3) if (hash(xx, y) > .8) box(xx, y, 1, 1, .32)
   }
+  if (XMAS) xmasMuralGrey()
   // the Tower of the Americas, its beacon blinking
   onGround("tower", 90, GROUND - 6, 16, .9)
   box(97, GROUND - 6 - 16 * 38.05 / 21.39 - 1, 2, 1, .3 + .7 * (.5 + .5 * Math.sin(TAU * 15 * t / LT)))
@@ -200,12 +207,14 @@ function truck(t) {
   ctx.fillStyle = "#6b4a2e"; rr(mx - 8, my - 8, mw + 16, mh + 16, 6); ctx.fill()
   ctx.fillStyle = "#1f2a26"; ctx.fillRect(mx, my, mw, mh)
   const chalk = "rgba(240,236,224,.9)"
+  if (XMAS) { xmasMenu(mx, my, mw, mh); } else {
   if (ICON.taco) { const im = iconImg("taco", "#f0ece0", 1.1); if (im.complete) ctx.drawImage(im, mx + 22, my + 22, 110, 110 * 19.05 / 37.67) }
   if (ICON.concha) { const im = iconImg("concha", "#f0ece0", 1); if (im.complete) ctx.drawImage(im, mx + 190, my + 14, 74, 74 * 29.44 / 30.73) }
   ctx.fillStyle = chalk; ctx.font = '700 15px "Geist Mono"'; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"
   ctx.letterSpacing = "2px"; ctx.fillText("TACOS", mx + 77, my + 112); ctx.fillText("CONCHAS", mx + 227, my + 112); ctx.letterSpacing = "0px"
   ctx.strokeStyle = chalk; ctx.lineWidth = 2
   for (const cx of [mx + 77, mx + 227]) { ctx.beginPath(); ctx.moveTo(cx - 22, my + 130); ctx.lineTo(cx + 22, my + 130); ctx.stroke() }
+  }
 
   // the cab: windshield, side window, door, headlight, bumper
   ctx.fillStyle = "#20252b"
@@ -233,6 +242,7 @@ function truck(t) {
   const at = x => ROOF - 22 + 26 * Math.sin(Math.PI * (x - TX) / (BOX_R - TX))
   ctx.strokeStyle = "#111"; ctx.lineWidth = 2; ctx.beginPath()
   for (let x = TX; x <= BOX_R; x += 10) x === TX ? ctx.moveTo(x, at(x)) : ctx.lineTo(x, at(x)); ctx.stroke()
+  if (XMAS) { xmasWrap(t, at); return }
   ctx.save(); ctx.globalCompositeOperation = "lighter"
   for (let i = 0, x = TX + 20; x < BOX_R - 10; i++, x += 42) {
     const a = Math.min(1, (.6 + .3 * Math.sin(TAU * (1 + i % 3) * t / LT + i)) * (.8 + .3 * pulseAt(t)))
@@ -240,6 +250,42 @@ function truck(t) {
     ctx.fillStyle = `rgba(255,214,150,${a.toFixed(2)})`; ctx.beginPath(); ctx.ellipse(x, at(x) + 9, 4.5, 6, 0, 0, TAU); ctx.fill()
   }
   ctx.restore()
+}
+// Christmas: the truck wrapped in lights, bulbs in the tab colours, gold, red and green, chasing on the beat:
+// the roof line, around the serving window, along the skirt and up the cab
+const XB = [TEAL, PINK, ORANGE, "#ffd343", "#e8323c", "#2fd06a"]
+function bulbRun(pts, t, seed) {
+  const step = Math.floor((t - OFFSET) * BPM / 60 * 2)
+  ctx.save(); ctx.globalCompositeOperation = "lighter"
+  pts.forEach(([x, y], i) => {
+    const c = XB[(i + seed) % XB.length], on = (i + step) % 3 === 0 ? 1 : .55
+    glow(x, y, 18, 18, c + (on > .9 ? "66" : "33"))
+    ctx.fillStyle = c; ctx.globalAlpha = .55 + .45 * on; ctx.beginPath(); ctx.ellipse(x, y, 4.5, 6, 0, 0, TAU); ctx.fill()
+  })
+  ctx.restore()
+}
+const line = (x0, y0, x1, y1, gap) => { const n = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0) / gap)); return Array.from({ length: n }, (_, i) => [lerp(x0, x1, i / n), lerp(y0, y1, i / n)]) }
+function xmasWrap(t, at) {
+  const roof = []; for (let x = TX + 16; x < BOX_R - 6; x += 30) roof.push([x, at(x) + 9])
+  bulbRun(roof, t, 0)
+  const wx = 500, wy = 452, ww = 340, wh = 148
+  bulbRun([...line(wx - 10, wy - 12, wx + ww + 10, wy - 12, 28), ...line(wx + ww + 10, wy - 12, wx + ww + 10, wy + wh + 10, 28),
+           ...line(wx + ww + 10, wy + wh + 10, wx - 10, wy + wh + 10, 28), ...line(wx - 10, wy + wh + 10, wx - 10, wy - 12, 28)], t, 2)
+  bulbRun(line(TX + 14, BOTTOM - 34, CAB_R - 24, BOTTOM - 34, 30), t, 4)
+  bulbRun(line(BOX_R + 4, CAB_TOP + 4, CAB_R - 70, CAB_TOP + 4, 30), t, 1)
+  // (the wreath is on the side panel now, round the Alamo Python mark)
+}
+
+// Christmas menu: ESPECIAL NAVIDEÑO in red chalk, the City's concha icon chalked large, CONCHAS under it,
+// and TACOS · TAMALES along the bottom
+function xmasMenu(mx, my, mw, mh) {
+  const chalk = "rgba(240,236,224,.9)"
+  ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"
+  ctx.font = '700 14px "Geist Mono"'; ctx.letterSpacing = "3px"; ctx.fillStyle = "rgba(255,120,120,.9)"; ctx.fillText("ESPECIAL NAVIDEÑO", mx + mw / 2, my + 26)
+  if (ICON.concha) { const im = iconImg("concha", "#f0ece0", 1); if (im.complete) { const w = 78, h = w * 29.44 / 30.73; ctx.drawImage(im, mx + 40, my + 40, w, h) } }
+  ctx.fillStyle = chalk; ctx.font = '700 22px "Geist Mono"'; ctx.fillText("CONCHAS", mx + 200, my + 80)
+  ctx.strokeStyle = "rgba(255,120,120,.8)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(mx + 150, my + 92); ctx.lineTo(mx + 250, my + 92); ctx.stroke()
+  ctx.fillStyle = chalk; ctx.font = '700 14px "Geist Mono"'; ctx.fillText("TACOS · TAMALES", mx + mw / 2, my + 134); ctx.letterSpacing = "0px"
 }
 
 // --- one feature, shipped across the song: the terminal's script, by fraction of the song ---
@@ -268,11 +314,38 @@ const STORY = [
   [.800, "build", p => `  reading the City's 311 [${"█".repeat(Math.round(p * 8)).padEnd(8, "░")}]`, .955],
   [.960, "ok", "✓ shipped to localhost:210"],
 ]
+// Christmas: the penguin builds an MCP server for DEVSA: one tool, list_events, over the site's public calendar
+// API (devsa.community/api/events), then asks an agent (fx, fx.sh) what's on this week. Simulated output.
+const XSTORY = [
+  [.010, "cmd", "$ mkdir devsa-mcp && cd devsa-mcp"],
+  [.035, "cmd", "$ pnpm add @modelcontextprotocol/sdk"],
+  [.070, "cmd", "$ vim src/tools/list_events.ts"],
+  [.090, "edit", p => `  GET devsa.community/api/events  +${Math.round(1 + p * 40)}`, .270],
+  [.280, "cmd", "$ pnpm test"],
+  [.300, "run", p => `  running 5 tests ${".".repeat(1 + Math.floor(p * 9) % 3)}`, .330],
+  [.330, "fail", "✗ 1 failed · event times came back in UTC"],
+  [.360, "cmd", "$ vim src/tools/list_events.ts"],
+  [.375, "edit", p => `  timeZone: "America/Chicago"   +${Math.round(1 + p * 2)}`, .430],
+  [.440, "cmd", "$ pnpm test"],
+  [.455, "run", p => `  running 5 tests ${".".repeat(1 + Math.floor(p * 9) % 3)}`, .480],
+  [.480, "ok", "✓ 5 passed"],
+  [.505, "cmd", "$ fx ask \"what's on in San Antonio this week?\""],
+  [.545, "run", p => `  → calling devsa.list_events ${".".repeat(1 + Math.floor(p * 9) % 3)}`, .590],
+  [.590, "ok", "✓ found this week's meetups"],
+  [.620, "cmd", "$ git commit -m \"DEVSA MCP server\""],
+  [.650, "cmd", "$ git push && gh pr create --fill"],
+  [.680, "out", "→ pull request #1 opened"],
+  [.700, "run", p => `  waiting for review ${".".repeat(1 + Math.floor(p * 20) % 3)}`, .760],
+  [.760, "ok", "✓ review: approved"],
+  [.790, "cmd", "$ gh pr merge --squash"],
+  [.815, "build", p => `  publishing devsa-mcp [${"█".repeat(Math.round(p * 8)).padEnd(8, "░")}]`, .955],
+  [.960, "ok", "✓ shipped · the calendar, for every agent"],
+]
 const COLOUR = { cmd: "rgba(235,235,235,.95)", out: "rgba(170,180,195,.9)", edit: "#7fd6cf", run: "rgba(170,180,195,.9)", build: "#ffcf6a", fail: "#ff6b6b", ok: "#5be3a0" }
 function storyAt(t) {
   const f = t / T, lines = []
   let phase = "idle"
-  for (const [f0, kind, text, f1] of STORY) {
+  for (const [f0, kind, text, f1] of (XMAS ? XSTORY : STORY)) {
     if (f < f0) break
     let s2
     if (kind === "cmd") { const n = Math.floor((t - f0 * T) / 1.1 * text.length); s2 = text.slice(0, Math.max(2, n)); if (n < text.length) phase = "typing" }
@@ -358,7 +431,7 @@ function table(t) {
     ctx.fillStyle = "rgba(14,18,26,.93)"; rr(bx, by, bw, bh, 10); ctx.fill()
     ctx.strokeStyle = st.phase === "shipped" ? "rgba(91,227,160,.6)" : "rgba(255,255,255,.18)"; ctx.lineWidth = 2; ctx.stroke()
     ;[PINK, ORANGE, TEAL].forEach((col, i) => { ctx.fillStyle = col; ctx.beginPath(); ctx.arc(bx + 16 + i * 14, by + 14, 4, 0, TAU); ctx.fill() })
-    ctx.font = '700 14px "Geist Mono"'; ctx.fillStyle = "rgba(255,255,255,.4)"; ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillText("~/localhost", bx + bw - 14, by + 14)
+    ctx.font = '700 14px "Geist Mono"'; ctx.fillStyle = "rgba(255,255,255,.4)"; ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillText(XMAS ? "~/devsa-mcp" : "~/localhost", bx + bw - 14, by + 14)
     ctx.font = '700 16px "Geist Mono"'; ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"
     st.lines.forEach(([txt, col], i) => { ctx.fillStyle = col; ctx.fillText(txt, bx + 16, by + 50 + i * 25) })
     if (st.phase !== "shipped" && Math.floor(t * 2) % 2 === 0) {                                      // the cursor
@@ -439,6 +512,86 @@ function car(t) {
   ctx.fillStyle = "#0a0b0d"; ctx.beginPath(); ctx.arc(x + 64, y - 10, 22, 0, TAU); ctx.arc(x + 236, y - 10, 22, 0, TAU); ctx.fill()
 }
 
+// pixel snow: the desk's six-armed flake and specks, seamless over the loop
+const XFLAKE = ["...#...", "#..#..#", ".#.#.#.", "..###..", "#######", "..###..", ".#.#.#.", "#..#..#", "...#..."]
+const XFLAKES = Array.from({ length: 70 }, (_, i) => { const kind = i % 10 < 6 ? 0 : i % 10 < 9 ? 1 : 2
+  return { x: hash(i, 31) * W, ph: hash(i, 32), laps: kind === 2 ? 1 : 2, sw: 10 + hash(i, 33) * 30, kind, px: [4, 2, 4][kind], a: [.5, .6, .85][kind] } })
+function xmasSnow(t) {
+  for (const f of XFLAKES) {
+    const h = f.kind ? 9 * f.px : f.px, k = ((t / T) * f.laps + f.ph) % 1, y = Math.round((-h + k * (H + 2 * h)) / f.px) * f.px
+    const x = Math.round((f.x + Math.sin(TAU * f.laps * t / T + f.ph * 6) * f.sw) / f.px) * f.px
+    ctx.fillStyle = `rgba(255,255,255,${f.a})`
+    if (!f.kind) { ctx.fillRect(x, y, f.px, f.px); continue }
+    XFLAKE.forEach((row, ry) => [...row].forEach((c, rx) => { if (c === "#") ctx.fillRect(x + rx * f.px, y + ry * f.px, f.px, f.px) }))
+  }
+}
+// --- ?xmas: Houston Street at the holidays ------------------------------------------------------------
+// A mural on a downtown wall above the truck, lit from below: an original design (not the Por Vida mural), a
+// flaming heart in the tab colours with gold rays, under a papel picado border. It is painted into the grey
+// layer so it reads as characters on the wall, then tinted (multiply) and washed with warm uplight.
+const MW = { x0: 1, x1: 15, y0: 12, y1: 31 }                         // the wall panel, in cells: high on the end wall of the building at the corner
+const MHEART = [".###...###.", "#####.#####", "###########", "###########", ".#########.", "..#######..", "...#####...", "....###....", ".....#....."]
+const MFLAME = ["..#.#..", ".#####.", "..###..", "...#..."]
+const MCELLS = (() => {                                              // [x, y, kind] for every painted cell
+  const c = [], cx = Math.round((MW.x0 + MW.x1) / 2), hx = cx - 5, hy = 19
+  for (let x = MW.x0 + 1; x < MW.x1 - 1; x++) c.push([x, MW.y0 + 1, "papel"], [x, MW.y0 + 2 + (x % 2), "papel"])   // a zigzag border
+  MHEART.forEach((row, r) => [...row].forEach((ch, q) => { if (ch === "#") c.push([hx + q, hy + r, "heart"]) }))
+  MFLAME.forEach((row, r) => [...row].forEach((ch, q) => { if (ch === "#") c.push([cx - 3 + q, hy - 4 + r, "flame"]) }))
+  for (let k = 0; k < 12; k++) {                                     // short gold rays around the heart
+    const a = k / 12 * TAU, r0 = 5.4
+    for (const r of [r0, r0 + 1]) c.push([Math.round(cx + Math.cos(a) * r * 1.15), Math.round(hy + 4 + Math.sin(a) * r * .8), "ray"])
+  }
+  return c.filter(([x, y]) => x > MW.x0 && x < MW.x1 - 1 && y > MW.y0 && y < MW.y1 - 1)
+})()
+const MCOL = { papel: [TEAL, PINK, ORANGE], heart: ["#ef426f"], flame: ["#ff8200", "#ffd343"], ray: ["#ffd343"] }
+function xmasMuralGrey() {
+  // the building on the corner, its end wall to us, standing on the sidewalk; lit windows below the mural
+  box(0, MW.y0 - 3, MW.x1 + 2, GROUND - 8 - MW.y0 + 3, .26)
+  box(0, MW.y0 - 4, MW.x1 + 3, 1, .34)                                      // its parapet
+  for (let y = MW.y1 + 2; y < GROUND - 10; y += 4) for (let x = 2; x < MW.x1; x += 4) box(x, y, 2, 2, hash(x, y) > .5 ? .5 : .28)
+  box(MW.x0, MW.y0, MW.x1 - MW.x0, MW.y1 - MW.y0, .16)                      // the painted wall
+  for (const [x, y, k] of MCELLS) box(x, y, 1, 1, k === "ray" ? .7 : k === "papel" ? .7 : .95)
+}
+function xmasMuralLight(t) {
+  ctx.save(); ctx.globalCompositeOperation = "multiply"                     // the characters take the paint's colour
+  MCELLS.forEach(([x, y, k], i) => { const cs = MCOL[k]; ctx.fillStyle = cs[k === "papel" ? Math.floor((x - MW.x0) / 4) % 3 : i % cs.length]; ctx.fillRect(x * CELL, y * CELL, CELL, CELL) })
+  ctx.restore()
+  ctx.save(); ctx.globalCompositeOperation = "lighter"                      // warm uplight, held to the wall, breathing slowly
+  ctx.beginPath(); ctx.rect(MW.x0 * CELL, MW.y0 * CELL, (MW.x1 - MW.x0) * CELL, (MW.y1 - MW.y0) * CELL); ctx.clip()
+  const a = .1 + .03 * Math.sin(TAU * 2 * t / LT)
+  for (const fx of [MW.x0 + 6, MW.x1 - 6]) glow(fx * CELL, MW.y1 * CELL, 200, 230, `rgba(255,196,120,${a.toFixed(3)})`)
+  ctx.restore()
+  ctx.fillStyle = "#2a2a2a"; for (const fx of [MW.x0 + 6, MW.x1 - 6]) ctx.fillRect(fx * CELL - 10, MW.y1 * CELL - 4, 20, 8)   // the fixtures
+}
+// The wreath, hung on the truck: a ring of deep greens round Alamo Python's mark on the side panel, a red bow at
+// its foot, bulbs in the tab colours and gold twinkling round it. Drawn after the truck, so it sits on the paint.
+const WR = { x: 340, y: 600, px: 9, r0: 15, r1: 18 }
+const WCELLS = (() => {
+  const c = []
+  for (let y = -WR.r1; y <= WR.r1; y++) for (let x = -WR.r1; x <= WR.r1; x++) {
+    const d = Math.hypot(x, y); if (d < WR.r0 || d > WR.r1) continue
+    const h = hash(x + 40, y + 40); c.push([x, y, h > .78 ? "#5cc27e" : h > .45 ? "#2a8a4c" : "#1d6b3a"])
+  }
+  return c
+})()
+const WBOW = ["##.....##", "###...###", "####.####", "#########", "####.####", "###...###", "##.....##"]
+function xmasWreath(t) {
+  const { x: cx, y: cy, px, r0, r1 } = WR, rm = (r0 + r1) / 2
+  for (const [x, y, c] of WCELLS) { ctx.fillStyle = c; ctx.fillRect(cx + x * px - px / 2, cy + y * px - px / 2, px, px) }
+  const by = cy + rm * px                                                    // the bow at the foot of the ring
+  WBOW.forEach((row, r) => [...row].forEach((ch, q) => { if (ch === "#") { ctx.fillStyle = q === 4 ? "#9e2028" : "#d8343c"; ctx.fillRect(cx + (q - 4.5) * px, by + (r - 3.5) * px, px, px) } }))
+  ctx.fillStyle = "#d8343c"
+  for (let k = 0; k < 2; k++) { ctx.fillRect(cx - (1.5 + k * .5) * px - px / 2, by + (4 + k) * px, px, px); ctx.fillRect(cx + (1.5 + k * .5) * px - px / 2, by + (4 + k) * px, px, px) }
+  const BC = [TEAL, PINK, ORANGE, "#ffd343"]
+  ctx.save(); ctx.globalCompositeOperation = "lighter"
+  for (let k = 0; k < 18; k++) {
+    const a = k / 18 * TAU - Math.PI / 2, bx = cx + Math.cos(a) * rm * px, bY = cy + Math.sin(a) * rm * px
+    if (Math.abs(bx - cx) < 4 * px && bY > cy) continue                    // the bow sits there
+    const c = BC[k % 4], on = .55 + .45 * Math.max(0, Math.sin(TAU * (2 + k % 3) * t / LT + k * 1.7))
+    glow(bx, bY, 14 * on, 14 * on, c + "55"); ctx.fillStyle = c; ctx.globalAlpha = on; ctx.beginPath(); ctx.arc(bx, bY, 4.5, 0, TAU); ctx.fill(); ctx.globalAlpha = 1
+  }
+  ctx.restore()
+}
 function render(t) {
   t = ((t % T) + T) % T
   paint(t)
@@ -453,10 +606,13 @@ function render(t) {
     ctx.fillText(ch, x * CELL + CELL / 2, y * CELL + CELL / 2 + 1)
   }
   towerLight(t)
+  if (XMAS) xmasMuralLight(t)
   truck(t)
+  if (XMAS) xmasWreath(t)
   customer(t)
   table(t)
   car(t)
+  if (XMAS) xmasSnow(t)
 
   // footer: who this is, and the music credit
   const cr = window.CREDITS && window.CREDITS.length ? window.CREDITS : ['"Tejano Lofi" by Patrick · made with Suno']
@@ -464,6 +620,7 @@ function render(t) {
   ctx.textAlign = "right"; ctx.textBaseline = "alphabetic"
   ctx.font = '500 20px "Geist"'; ctx.fillStyle = "rgba(255,255,255,0.75)"
   ctx.fillText("♪  " + line, W - 60, H - 52)
+  if (XMAS) { xs.radio(ctx, 60, H - 36 - xs.RADIO.length * 3, 3, (((t - OFFSET) * BPM / 60) / 4) % 1); return }
   ctx.textAlign = "left"; ctx.font = '700 22px "Geist Mono"'; ctx.fillStyle = "rgba(255,255,255,0.8)"
   ctx.letterSpacing = "3px"; ctx.fillText("DEVSA FM  ·  devsa.community", 60, H - 52); ctx.letterSpacing = "0px"
   const tw = 46

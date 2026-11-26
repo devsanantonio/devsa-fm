@@ -1,0 +1,29 @@
+Title:
+DEVSA FM · Christmas in San Antonio, in ASCII · Tejano lofi for learners and builders
+
+Description:
+DEVSA FM's Christmas edition: Tejano lofi radio for San Antonio's learners and builders, live through the holidays.
+
+Press play and keep building. On screen, Christmas in San Antonio, drawn in ASCII with pixel snow, and every scene moves to its own song:
+· the DEVSA tree, from the DEVSA TV studio desk
+· the ride downtown: the bus in a holiday wrap, past Mission San José and the boots outlined in lights
+· movie night at Mission Marquee Plaza: the old drive-in screen in lights, the cast on blankets and lawn chairs, devsa.community's "Where San Antonio Builds." on the big screen over DEVSA's event photos, and the penguin keeping the cocoa stand
+· the DEVSA Express: a holiday train carrying every community group in DEVSA's network, with Santa's sleigh overhead
+· holiday traffic past the Alamodome, next door to the station: a tree in a pickup's bed, antlers on a sedan, the cast walking the sidewalk to the dome with a gift, and once a loop the roadster, the penguin at the wheel, lifting off into the night
+· the holiday market at La Villita: booths for Access Granted, PySanAntonio and localhost:210, and chips and guac
+· San Fernando Cathedral's Christmas light show: luminarias, a nochebuena, papel picado, ornaments and a DEVSA terminal
+· the River Walk parade: three barges of elves, with Linux San Antonio's penguin, the PySanAntonio mascot and DEVSA FM's agents
+· the Alamo Python taco truck, wrapped in lights, with conchas on the board and the penguin shipping an MCP server for the DEVSA calendar
+· and a New Year finale: the DEVSA mark and pixel fireworks
+
+The edition goes round every 20 minutes.
+
+Build a scene for the stream. DEVSA FM is open source, and every scene is one HTML file:
+https://github.com/devsanantonio/devsa-fm
+
+About DEVSA FM: https://www.devsa.community/fm
+Find your next meetup: https://www.devsa.community/events
+Join the community: https://www.devsa.community/discord
+
+Music made with ElevenLabs:
+"By the Tree at Midnight" · "Christmas Cartridge Glow" · "River Walk Nocturne" · "Midnight Mistletoe Cumbia" · "Midnight Tamal Loop" · "Midnight Spark"

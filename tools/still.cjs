@@ -1,6 +1,7 @@
 // Saves a scene as a PNG at the times you name, for checking your work and for pull requests.
 //   npm run still -- starter 4 12 30         -> out/stills/starter-t4.png, -t12.png, -t30.png
 //   SYNC=beats-tejano.json npm run still -- cathedral 50    (a synced scene, on that song's beat grid)
+//   SCENE_QUERY=xmas npm run still -- riverwalk 20          (a scene's variant, as render.cjs's SCENE_QUERY)
 // Needs Chrome: set CHROME=/path/to/chrome if it isn't the macOS app.
 const fs = require('fs'), path = require('path')
 let puppeteer
@@ -17,12 +18,12 @@ if (!name) { console.error('usage: npm run still -- <scene> [seconds...]'); proc
   const pg = await b.newPage(); await pg.setViewport({ width: 1920, height: 1080 })
   pg.on('pageerror', e => console.error('scene error:', e.message))
   await pg.evaluateOnNewDocument((b, t) => { window.BEATS = b; window.LOOP_T = t }, beats, beats ? beats.duration : 60)
-  await pg.goto('file://' + path.join(ROOT, 'scene', name.replace(/\.html$/, '') + '.html') + '?still', { waitUntil: 'load' })
+  await pg.goto('file://' + path.join(ROOT, 'scene', name.replace(/\.html$/, '') + '.html') + '?still' + (process.env.SCENE_QUERY ? '&' + process.env.SCENE_QUERY : ''), { waitUntil: 'load' })
   const ready = await pg.evaluate(() => Promise.race([window.ready.then(() => true), new Promise(r => setTimeout(() => r(false), 20000))]))
   if (!ready) { console.error('the scene never set window.ready: check the browser console with npm run preview'); await b.close(); process.exit(1) }
   for (const t of times.length ? times : ['8']) {
     await pg.evaluate(t => window.render(t), +t); await new Promise(r => setTimeout(r, 150))
-    const file = path.join(out, `${name}-t${t}.png`); await pg.screenshot({ path: file }); console.log(file)
+    const file = path.join(out, `${name}${process.env.SCENE_QUERY ? '-' + process.env.SCENE_QUERY : ''}-t${t}.png`); await pg.screenshot({ path: file }); console.log(file)
   }
   await b.close()
 })()

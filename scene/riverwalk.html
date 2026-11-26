@@ -15,9 +15,14 @@
   in greys at low resolution, then every cell becomes a character by brightness), and a
   pixel terminal buddy in headphones nodding to the beat. "Now playing" top right.
   1920x1080, a seamless T-second loop; render(t) draws a frame.
+  ?xmas dresses it for Christmas, the same scene otherwise: light strands draped on the cypress, the barge
+  strung with bulbs, a Santa hat on the PySA mascot and a scarf on the penguin (drawn over, the images
+  unaltered), luminarias along both banks and in the water, pixel snow, Santa's sleigh over the Tower once
+  a loop, and the DEVSA FM radio in the footer in place of the words. Without ?xmas nothing changes.
 -->
 <canvas id="c" width="1920" height="1080"></canvas>
 <script src="plush.js"></script>
+<script src="xmas-sprites.js"></script>
 <script>
 // synced (render.cjs SYNC=...): the loop is the song, with the song inside it, and BEATS carries
 // its beat grid, so the riders nod and the lights on the water pulse on the real beat. The
@@ -31,7 +36,8 @@ const beatPh = t => { const bc = (t - OFFSET) * BPM / 60; return bc - Math.floor
 const pulseAt = t => Math.exp(-beatPh(t) * 3.5)
 const hash = (a, b) => { const s = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return s - Math.floor(s) }
 const lerp = (a, b, p) => a + (b - a) * p
-const ctx = document.getElementById("c").getContext("2d")
+let ctx = document.getElementById("c").getContext("2d")
+const XMAS = new URLSearchParams(location.search).has("xmas")
 const CELL = 12, COLS = W / CELL, ROWS = H / CELL      // 160 x 90 characters
 const RAMP = " .,:;-=+*#%@"
 
@@ -100,8 +106,10 @@ function paint(t) {
     const x = Math.floor(hash(i, 1) * COLS), y = Math.floor(hash(i, 2) * 26), k = 1 + Math.floor(hash(i, 3) * 4)
     box(x, y, 1, 1, .26 + .3 * hash(i, 4) + .16 * Math.sin(TAU * k * t / LT + i))
   }
-  g.fillStyle = gray(.95); g.beginPath(); g.arc(150, 8, 3.6, 0, TAU); g.fill()
-  g.fillStyle = gray(.05); g.beginPath(); g.arc(151.6, 7, 3.4, 0, TAU); g.fill()
+  if (!XMAS) {                                             // Christmas: no moon, the snow and the sleigh have the sky
+    g.fillStyle = gray(.95); g.beginPath(); g.arc(150, 8, 3.6, 0, TAU); g.fill()
+    g.fillStyle = gray(.05); g.beginPath(); g.arc(151.6, 7, 3.4, 0, TAU); g.fill()
+  }
 
   // the landmarks, standing on the riverbank
 
@@ -354,6 +362,50 @@ function penguin(t) {
   }
 }
 
+// Christmas: three barges in a parade, each with an elf crew. The elves are a mix: girls with braids and boys,
+// skin tones from light to deep, tunics in the tab colours. Lead barge: the Linux SA penguin; then the PySA
+// mascot; then DEVSA FM's agents. The penguin and the mascot are the original images, unaltered.
+const ELF_GIRL = ["........G.....", ".......EE.....", "......EEE.....", ".....EEEE.....", "....EEEEEE....", "...PPPPPPPP...",
+  "..ShSSSSSShS..", ".hSSSCSSCSSSh.", ".h..SSSSSS..h.", ".h..SSPPSS..h.", ".h.EEEEEEEE.h.", ".hEEEEGGEEEEh.", ".NSEEEEEEEESN.",
+  "...EEEEEEEE...", "...eeeeeeee...", "....OO..OO....", "....OO..OO....", "...KKK..KKK..."]
+const SKIN = [["#f2cfae", "#d9ab86"], ["#e0a87e", "#c48a60"], ["#c2875a", "#a06c44"], ["#9a6440", "#7c4e30"], ["#6e4428", "#55331e"]]
+const HAIR = ["#2a1a10", "#5a3a1e", "#c9963e", "#1a1a1a", "#7a2e1e"]
+const DARK = { [TEAL]: "#007f78", [PINK]: "#a82e4f", [ORANGE]: "#b35a00" }
+function elf(x, t, e) {                                   // e: { c tunic, skin, hair, girl, ph, wave, gift }
+  const px = 7, beat = (beatPh(t) + e.ph) % 1, bob = Math.round((0.5 - 0.5 * Math.cos(beat * TAU)) * 2) * px / 2   // a quarter smaller than the leads: the penguin, the mascot and the agents lead each barge, the elves crew it
+  const map = e.girl ? ELF_GIRL : beat < .5 ? xs.ELF : xs.ELF_STEP
+  const [w, h] = xs.size(map, px), x0 = x - w / 2, y0 = 818 - h + ROCK(t) - bob
+  const [sk, sk2] = SKIN[e.skin]
+  xs.spr(ctx, map, { ...xs.PAL, E: e.c, e: DARK[e.c], S: sk, s: sk2, h: HAIR[e.hair], N: e.c === PINK ? xs.GOLD : PINK }, x0, y0, px)
+  if (e.wave) { const up = Math.sin(t * 6 + x) > 0; ctx.fillStyle = sk; ctx.fillRect(x0 + w - px, y0 + (up ? 6 : 11) * px, 2 * px, 2 * px) }
+  if (e.gift !== undefined) { const [gw, gh] = xs.size(xs.GIFT, px * .7); xs.spr(ctx, xs.GIFT, { ...xs.PAL, ...xs.WRAPS[e.gift] }, x - gw / 2, y0 - gh + px, px * .7) }
+}
+function penguinAt(x, t) {
+  if (!RIDER.complete) return
+  const bob = (0.5 - 0.5 * Math.cos(beatPh(t) * TAU)) * 3, h = 250, w = h * RIDER.width / RIDER.height
+  ctx.imageSmoothingEnabled = false; ctx.drawImage(RIDER, x - w / 2, 860 - h + ROCK(t) + bob, w, h); ctx.imageSmoothingEnabled = true
+}
+function pysaAt(x, t) {
+  if (!PYSA.complete) return
+  const b2 = (0.5 - 0.5 * Math.cos(((beatPh(t) + .5) % 1) * TAU)) * 3, ph = 400, pw = ph * PYSA.width / PYSA.height
+  ctx.drawImage(PYSA, x - pw / 2, 890 - ph + ROCK(t) + b2 / 2, pw, ph)
+}
+function agentAt(x, t, tint, seed, ph) {
+  const b = (0.5 - 0.5 * Math.cos(((beatPh(t) + ph) % 1) * TAU)) * 3
+  drawPlush(ctx, { x, y: 842 + ROCK(t) - b, s: 1.02, tint, number: "", t, seed, look: 4 * Math.sin(t * .4 + seed), mouth: .35 + .25 * Math.sin(t * .9 + seed), lean: .03 * Math.sin(t * .7 + seed) })
+}
+const BOATS = [
+  t => { elf(560, t, { c: PINK, skin: 4, hair: 0, girl: 1, ph: 0, wave: 1 }); penguinAt(730, t)
+         elf(900, t, { c: TEAL, skin: 1, hair: 2, ph: .3, gift: 1 }); elf(1050, t, { c: ORANGE, skin: 2, hair: 3, girl: 1, ph: .6 }) },
+  t => { elf(560, t, { c: TEAL, skin: 2, hair: 3, ph: .1, gift: 0 }); elf(700, t, { c: ORANGE, skin: 0, hair: 4, girl: 1, ph: .45, wave: 1 })
+         pysaAt(900, t); elf(1060, t, { c: PINK, skin: 3, hair: 0, girl: 1, ph: .7 }) },
+  t => { agentAt(540, t, TEAL, 3, .25); elf(680, t, { c: PINK, skin: 1, hair: 1, girl: 1, ph: .2, gift: 3 })
+         agentAt(830, t, PINK, 6, .5); elf(960, t, { c: ORANGE, skin: 4, hair: 3, ph: .55, wave: 1 }); agentAt(1070, t, ORANGE, 13, .75) },
+]
+// the parade: three barges, 1150 px apart, crossing once a loop (fm-style T, slow when synced to a long track)
+const PARADE_GAP = 1150
+const paradeDX = (t, k) => lerp(-1250, 1560 + 2 * PARADE_GAP, (t % T) / T) - k * PARADE_GAP
+
 // --- in colour, over the ASCII ---
 const CYPRESS = [[38, 26, 7], [50, 20, 6], [62, 24, 6], [100, 22, 6], [112, 28, 8], [140, 21, 6]]
 const glowDot = (x, y, r, col, a) => { const gr = ctx.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, `rgba(${col},${a.toFixed(3)})`); gr.addColorStop(1, `rgba(${col},0)`)
@@ -445,13 +497,163 @@ function nearBridge(t) {
   for (let x = 1738; x < 1940; x += 16) ctx.fillRect(x, 360, 7, 20)
   ctx.fillStyle = "#24211e"; ctx.fillRect(1742, 300, 6, 52); ctx.fillStyle = "#ffe2a8"; ctx.fillRect(1737, 290, 16, 12)
   ctx.save(); ctx.globalCompositeOperation = "lighter"; glowDot(1745, 296, 70, "255,210,150", .35); ctx.restore()
-  // the couple, leaning on the parapet, looking down the river; one turns to the other now and then
+  // the couple, leaning on the parapet, looking down the river; one turns to the other now and then. At Christmas
+  // they wave while a barge of the parade passes under the bridge
   const turn = Math.sin(TAU * 2 * t / LT) > .6 ? 1 : 0
+  const passing = XMAS && BOATS.some((_, k) => { const dx = paradeDX(t, k); return dx + 1110 > 1560 && dx + 470 < 1900 })
   for (const [x, hgt, c] of [[1820, 64, "#14120f"], [1848, 58, "#17140f"]]) {
     ctx.fillStyle = c
     ctx.beginPath(); ctx.arc(x + (x === 1820 ? turn * 3 : 0), 352 - hgt + 8, 8, 0, TAU); ctx.fill()
     ctx.beginPath(); ctx.roundRect(x - 10, 352 - hgt + 16, 20, hgt - 18, 6); ctx.fill()
+    if (passing) { const up = Math.sin(t * 7 + x) > 0; ctx.save(); ctx.translate(x - 8, 352 - hgt + 20); ctx.rotate(up ? -2.5 : -2.0); ctx.fillRect(0, -3, 26, 6); ctx.restore() }   // an arm up, waving
   }
+  if (XMAS) {                                                       // bulbs along the parapet's rail, stepping on the beat
+    const n = Math.floor(((t - OFFSET) * BPM / 60) % 600 + 600)
+    for (let x = 1736, i = 0; x < 1940; x += 18, i++) { const c = XBULB[(i + n) % XBULB.length]
+      ctx.save(); ctx.globalCompositeOperation = "lighter"; glowDot(x, 350, 14, `${parseInt(c.slice(1, 3), 16)},${parseInt(c.slice(3, 5), 16)},${parseInt(c.slice(5, 7), 16)}`, .5); ctx.restore()
+      ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, 350, 3.6, 0, TAU); ctx.fill() }
+  }
+}
+
+
+// ===== ?xmas: reflections in the river ============================================================
+// each barge is drawn to its own layer, then laid on the water under its hull mirrored, squashed and broken into
+// rippling strips, fading with depth; the bank's umbrellas and lanterns throw soft coloured streaks
+const bl = document.createElement("canvas"); bl.width = W; bl.height = H; const bctx = bl.getContext("2d")
+const WATERLINE = 934
+function bargeReflection(t) {
+  for (let y = WATERLINE, k = 0; y < H; y += 4, k++) {
+    const d = (y - WATERLINE) / (H - WATERLINE), sy = WATERLINE - (y - WATERLINE) * 1.5 - 4
+    if (sy < 640) break
+    const off = Math.sin(y * .09 + t * 2.4) * (3 + 7 * d)
+    ctx.globalAlpha = .34 * (1 - d) * (k % 2 ? .75 : 1)
+    ctx.drawImage(bl, 0, sy, W, 6, off, y, W, 4)
+  }
+  ctx.globalAlpha = 1
+}
+function bankReflections(t) {
+  ctx.save(); ctx.globalCompositeOperation = "lighter"
+  UMBRELLAS.forEach((x, i) => {
+    const col = [TEAL, PINK, ORANGE][i % 3]
+    for (let k = 0; k < 6; k++) { const y = 640 + k * 14, wob = Math.sin(t * 2 + k * 1.3 + i) * (2 + k), a = .16 * (1 - k / 6)
+      ctx.fillStyle = xrgba(col, a); ctx.fillRect(x - 18 + wob, y, 36 - k * 3, 3)
+      ctx.fillStyle = xrgba("#ffd9a0", a * .8); ctx.fillRect(x - 6 - wob, y + 6, 12, 2) }
+  })
+  ctx.restore()
+}
+// ===== ?xmas: Christmas on the River Walk =========================================================
+const GOLD = "#ffd343"
+const XBULB = ["#3d6bff", "#3d6bff", "#5aa0ff", "#3d6bff", "#ff3b4e", "#2ee06a", GOLD, TEAL, PINK, ORANGE]
+const xrgba = (h, a) => `rgba(${parseInt(h.slice(1, 3), 16)},${parseInt(h.slice(3, 5), 16)},${parseInt(h.slice(5, 7), 16)},${a.toFixed(3)})`
+// light strands hanging through each cypress crown: sparse, thin, mostly blue, twinkling
+function xmasTreeLights(t) {
+  ctx.save(); ctx.globalCompositeOperation = "lighter"
+  CYPRESS.forEach(([cx, h, w], ti) => {
+    if (cx >= 125) return                                // the cypress behind the Torch of Friendship stays dark, so the Torch reads
+    const top = 44 - h, n = 3 + Math.round(w / 3)
+    for (let sIdx = 0; sIdx < n; sIdx++) {
+      const sx = (cx - w * .75 + (sIdx + .5) * (w * 1.5 / n) + (hash(ti, sIdx) - .5)) * CELL
+      const y0 = (top + 2 + hash(sIdx, ti) * 3) * CELL, y1 = (top + h * (.62 + .2 * hash(ti + 5, sIdx))) * CELL
+      for (let y = y0, k = 0; y < y1; y += 11, k++) {
+        const c = XBULB[Math.floor(hash(ti * 31 + sIdx, k) * XBULB.length)]
+        const tw = .5 + .5 * Math.sin(TAU * (2 + (k % 3)) * t / LT + sIdx * 1.7 + k + ti)
+        glowDot(sx, y, 7, xrgba(c, 1).slice(5, -7), .28 * tw)
+        ctx.fillStyle = xrgba(c, .65 + .35 * tw); ctx.beginPath(); ctx.arc(sx, y, 2, 0, TAU); ctx.fill()
+      }
+    }
+    for (let k = 0; k < 5; k++) {                                  // their colour in the river
+      const y = 640 + k * 14, wob = Math.sin(TAU * 3 * t / LT + k + ti) * 8
+      ctx.fillStyle = xrgba(XBULB[(k + ti) % XBULB.length], .14 * (1 - k / 6) * (.7 + .5 * pulseAt(t)))
+      ctx.fillRect(cx * CELL - w * 6 + wob, y, w * 12 * (.5 + .5 * hash(k, ti)), 3)
+    }
+  })
+  ctx.restore()
+}
+// luminarias: paper-bag lanterns along both walks (not behind the bridge), and their glow in the water
+const LUMI = []
+for (let x = 22; x < 1740; x += 46) if (x < 610 || x > 1310) LUMI.push(x)
+function luminarias(t) {
+  for (const [i, x] of LUMI.entries()) {
+    const y = 604, fl = .8 + .2 * Math.sin(t * 11 + i * 2.3) * Math.sin(t * 7.3 + i)
+    ctx.save(); ctx.globalCompositeOperation = "lighter"
+    glowDot(x, y - 6, 26, "255,180,90", .38 * fl)
+    for (let k = 0; k < 3; k++) { const wob = Math.sin(TAU * 3 * t / LT + k + i) * 3
+      ctx.fillStyle = `rgba(255,180,90,${(.16 * fl * (1 - k / 3)).toFixed(3)})`; ctx.fillRect(x - 5 + wob, 650 + k * 16 + (i % 2) * 6, 10, 3) }
+    ctx.restore()
+    ctx.fillStyle = `rgba(232,${Math.round(170 + 30 * fl)},110,.95)`; ctx.fillRect(x - 6, y - 14, 12, 14)   // the bag, lit from inside
+    ctx.fillStyle = "rgba(120,70,30,.6)"; ctx.fillRect(x - 6, y - 14, 12, 2)                               // its folded rim
+    ctx.fillStyle = "rgba(255,240,200,.9)"; ctx.fillRect(x - 1, y - 8, 2, 3)                               // the candle
+  }
+}
+// chasing bulbs along the barge's rim (inside the boat's translate, so they ride with it)
+function bargeBulbs(t) {
+  const x0 = 470, x1 = 1110, y = 800 + ROCK(t) - 6, C = [TEAL, PINK, ORANGE, GOLD], step = Math.floor(t * 6)
+  ctx.strokeStyle = "rgba(255,255,255,.25)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x0 + 30, y); ctx.lineTo(x1 - 30, y); ctx.stroke()
+  for (let x = x0 + 36, i = 0; x < x1 - 30; x += 20, i++) {
+    const c = C[(i + step) % 4], on = (i + step) % 4 === 0 ? 1 : .55
+    ctx.save(); ctx.globalCompositeOperation = "lighter"; glowDot(x, y + 3, 14, xrgba(c, 1).slice(5, -7), .4 * on); ctx.restore()
+    ctx.fillStyle = c; ctx.globalAlpha = .6 + .4 * on; ctx.beginPath(); ctx.arc(x, y + 3, 4.5, 0, TAU); ctx.fill(); ctx.globalAlpha = 1
+  }
+}
+// a Santa hat set on the mascot's sombrero and a red scarf at the penguin's neck: drawn over, images unaltered
+function xmasOutfits(t) {
+  const beat = beatPh(t), px = 6
+  if (PYSA.complete && PYSA.naturalWidth) {
+    const b2 = (0.5 - 0.5 * Math.cos(((beat + .5) % 1) * TAU)) * 3, ph = 400, top = 890 - ph + ROCK(t) + b2 / 2
+    const hx = 960 + HAT_DX, hy = top + HAT_DY
+    const HAT = ["......WW..", ".....WWWW.", "....RRRWW.", "...RRRRR..", "..RRRRRR..", ".RRRRRRRR.", "WWWWWWWWWW", "WWWWWWWWWW"]
+    HAT.forEach((row, r) => [...row].forEach((ch, q) => { if (ch === ".") return
+      ctx.fillStyle = ch === "R" ? "#d8343c" : "#f4f4f4"; ctx.fillRect(Math.round(hx - 5 * px + q * px), Math.round(hy + r * px), px, px) }))
+  }
+  if (RIDER.complete && RIDER.naturalWidth) {
+    const bob = (0.5 - 0.5 * Math.cos(beat * TAU)) * 3, h = 250, w = h * RIDER.width / RIDER.height
+    const top = 860 - h + ROCK(t) + bob, sx = 690 - w * SCARF_W / 2, sy = top + h * SCARF_Y, p2 = 7
+    ctx.fillStyle = "#d8343c"
+    for (let q = 0; q < Math.round(w * SCARF_W / p2); q++) ctx.fillRect(Math.round(sx + q * p2), Math.round(sy), p2, 2 * p2)
+    ctx.fillRect(Math.round(sx + w * SCARF_W * .62), Math.round(sy + 2 * p2), 2 * p2, 4 * p2)            // the tail
+    ctx.fillStyle = "#9e2028"; ctx.fillRect(Math.round(sx), Math.round(sy + p2 * 1.5), Math.round(w * SCARF_W), Math.ceil(p2 / 2))
+    ctx.fillStyle = "#f4f4f4"; ctx.fillRect(Math.round(sx + w * SCARF_W * .62), Math.round(sy + 6 * p2), 2 * p2, p2)   // fringe
+  }
+}
+const HAT_DX = 0, HAT_DY = -26, SCARF_Y = .47, SCARF_W = .56
+// pixel snow: the DEVSA TV desk's six-armed flake and specks, seamless over the loop
+const XFLAKE = ["...#...", "#..#..#", ".#.#.#.", "..###..", "#######", "..###..", ".#.#.#.", "#..#..#", "...#..."]
+const XFLAKES = Array.from({ length: 80 }, (_, i) => {
+  const kind = i % 10 < 6 ? 0 : i % 10 < 9 ? 1 : 2
+  return { x: hash(i, 131) * W, ph: hash(i, 132), laps: kind === 2 ? 1 : 2, sw: 10 + hash(i, 133) * 30, kind, px: [4, 2, 4][kind], a: [.5, .6, .85][kind] }
+})
+function pixelSnow(t) {
+  for (const f of XFLAKES) {
+    const h = f.kind ? 9 * f.px : f.px, k = ((t / T) * f.laps + f.ph) % 1, y = -h + k * (H + 2 * h)
+    const x = Math.round((f.x + Math.sin(TAU * f.laps * t / T + f.ph * 6) * f.sw) / f.px) * f.px, yy = Math.round(y / f.px) * f.px
+    ctx.fillStyle = `rgba(255,255,255,${f.a})`
+    if (!f.kind) { ctx.fillRect(x, yy, f.px, f.px); continue }
+    XFLAKE.forEach((row, ry) => [...row].forEach((c, rx) => { if (c === "#") ctx.fillRect(x + rx * f.px, yy + ry * f.px, f.px, f.px) }))
+  }
+}
+// Santa's sleigh and reindeer, high over the Tower, once a loop (left to right, centred in the loop)
+const SDUR = 14, STEAM = 4, SGAP = .03, SPX = 4
+const spath = u => [lerp(-500, W + 500, u), 178 - 32 * Math.sin(u * Math.PI) + 10 * Math.sin(u * TAU * 3)]
+function xmasSleigh(t) {
+  const u = (t - (T - SDUR) / 2) / SDUR; if (u < 0 || u > 1) return
+  const [x, y] = spath(u)
+  ctx.save(); ctx.globalCompositeOperation = "lighter"
+  for (let k = 1; k <= 30; k++) { const uu = u - k * .006; if (uu < 0) break
+    const [sx, sy] = spath(uu), a = (1 - k / 30) * (.5 + .5 * Math.sin(t * 9 + k)), c = [GOLD, TEAL, GOLD, PINK, GOLD, ORANGE][k % 6]
+    glowDot(sx, sy - 24, 8, xrgba(c, 1).slice(5, -7), .5 * a); ctx.fillStyle = xrgba(c, .9 * a); ctx.fillRect(Math.round(sx / 4) * 4, Math.round((sy - 24) / 4) * 4, 4, 4) }
+  ctx.restore()
+  ctx.strokeStyle = "rgba(255,211,67,.55)"; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x + 12 * SPX, y - 8 * SPX)
+  for (let k = 1; k <= STEAM; k++) { const [rx, ry] = spath(Math.min(1, u + k * SGAP)); ctx.lineTo(rx, ry - 9 * SPX) }
+  ctx.stroke()
+  for (let k = STEAM; k >= 1; k--) {
+    const [rx, ry] = spath(Math.min(1, u + k * SGAP)), [w, h] = xs.size(xs.DEER, SPX), leap = Math.floor(t * 6 + k * .5) % 2 === 1
+    ctx.save(); ctx.globalCompositeOperation = "lighter"; glowDot(rx + w * .4, ry - h * .55, 10, xrgba(xs.NOSE[k % 3], 1).slice(5, -7), .6); ctx.restore()
+    xs.spr(ctx, leap ? xs.DEER_LEAP : xs.DEER, { ...xs.PAL, N: xs.NOSE[k % 3] }, rx - w / 2, ry - h + (leap ? -2 * SPX : 0), SPX)
+  }
+  const [sw, sh] = xs.size(xs.SLEIGH, SPX)
+  xs.spr(ctx, xs.SACK, xs.PAL, x - sw / 2 - 2 * SPX, y - sh - 7 * SPX, SPX)
+  xs.spr(ctx, xs.SANTA_SEATED, xs.PAL, x - sw / 2 + 10 * SPX, y - sh - 13 * SPX, SPX)
+  xs.spr(ctx, xs.SLEIGH, xs.PAL, x - sw / 2, y - sh, SPX)
 }
 
 function render(t) {
@@ -467,15 +669,29 @@ function render(t) {
     ctx.fillStyle = `rgba(235,235,235,${(.25 + v * .75).toFixed(2)})`
     ctx.fillText(ch, x * CELL + CELL / 2, y * CELL + CELL / 2 + 1)
   }
-  treeLights(t)
+  if (XMAS) xmasSleigh(t)
+  if (XMAS) xmasTreeLights(t); else treeLights(t)
   umbrellas(t)
+  if (XMAS) luminarias(t)
   ducks(t)
-  ctx.save(); ctx.translate(boatDX(t), 0)
-  passengers(t)
-  penguin(t)
-  barge(t)
-  ctx.restore()
+  if (XMAS) {
+    bankReflections(t)
+    for (let k = 0; k < BOATS.length; k++) {
+      const dx = paradeDX(t, k); if (dx < -1200 || dx > 1900) continue
+      bctx.clearRect(0, 0, W, H)
+      const real = ctx; ctx = bctx                                    // draw the barge into its own layer
+      ctx.save(); ctx.translate(dx, 0); BOATS[k](t); barge(t); bargeBulbs(t); ctx.restore()
+      ctx = real
+      bargeReflection(t)
+      ctx.drawImage(bl, 0, 0)
+    }
+  } else {
+    ctx.save(); ctx.translate(boatDX(t), 0)
+    passengers(t); penguin(t); barge(t)
+    ctx.restore()
+  }
   nearBridge(t)
+  if (XMAS) pixelSnow(t)
 
   // now playing, bottom right, opposite DEVSA FM; the credit rotates if there are several tracks
   const cr = window.CREDITS && window.CREDITS.length ? window.CREDITS : ['"Tejano Lofi" by Patrick · made with Suno']
@@ -483,7 +699,8 @@ function render(t) {
   ctx.textAlign = "right"; ctx.textBaseline = "alphabetic"
   ctx.font = '500 20px "Geist"'; ctx.fillStyle = "rgba(255,255,255,0.75)"
   ctx.fillText("♪  " + line, W - 60, H - 52)
-  // bottom left: who this is
+  // bottom left: who this is (in ?xmas, the DEVSA FM radio alone, notes rising on the beat)
+  if (XMAS) { xs.radio(ctx, 60, H - 36 - xs.RADIO.length * 3, 3, (((t - OFFSET) * BPM / 60) / 4) % 1); return }
   ctx.textAlign = "left"; ctx.font = '700 22px "Geist Mono"'; ctx.fillStyle = "rgba(255,255,255,0.8)"
   ctx.letterSpacing = "3px"; ctx.fillText("DEVSA FM  ·  devsa.community", 60, H - 52); ctx.letterSpacing = "0px"
   const tw = 46

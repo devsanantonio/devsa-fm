@@ -25,8 +25,13 @@
   1920x1080, a seamless T-second loop: render(t) draws a frame.
 -->
 <canvas id="c" width="1920" height="1080"></canvas>
+<script src="xmas-sprites.js"></script>
 <script>
-const NIGHT = new URLSearchParams(location.search).has("night")
+// ?xmas, the Christmas edition: the night commute with pixel snow, Mission San José and the boots outlined in bulbs,
+// the bus in a dark holiday wrap with the tab colours, lights on its roof, a wreath on its nose, DEVSA Christmas
+// stickers on its windows, passengers in Santa and elf hats, and Santa's sleigh flying over. It implies ?night.
+const XMAS = new URLSearchParams(location.search).has("xmas")
+const NIGHT = XMAS || new URLSearchParams(location.search).has("night")
 if (NIGHT) document.documentElement.classList.add("night")
 const N = (night, day) => NIGHT ? night : day          // a value for each time of day
 const T = 60, W = 1920, H = 1080, TAU = Math.PI * 2
@@ -162,7 +167,8 @@ function paint(t) {
 // with its die-cut edges and glare, stuck across the windows like a laptop lid:
 // [file, centre x along the bus, height, tilt]
 // every other window pane, rear to front: [file, tilt]
-const WINDOW_STICKERS = [["sticker-hello", -.04], ["devsa-window-sticker", -.02], ["sticker-love", .04]]
+const WINDOW_STICKERS = (XMAS ? [["sticker-xmas-snow", -.04], ["devsa-window-sticker", -.02], ["sticker-xmas-noche", .04]]
+                              : [["sticker-hello", -.04], ["devsa-window-sticker", -.02], ["sticker-love", .04]])
   .map(([f, tilt]) => { const im = new Image(); im.src = `${f}.png`; return { im, tilt } })
 function rr(x, y, w, h, r) {
   ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r)
@@ -172,7 +178,8 @@ const cycles = k => Math.max(1, Math.round(k * T / 60))
 // the passengers: [pane, where in the pane 0..1, standing, how often they sway]
 const PASSENGERS = [[0, .22, 0, 7], [0, .78, 1, 5], [1, .3, 0, 6], [1, .72, 1, 4], [2, .2, 0, 8], [2, .82, 0, 5], [3, .4, 1, 6], [3, .8, 0, 7], [4, .25, 0, 5], [4, .7, 1, 6]]
 // rear (left) to front (right): maroon, red, orange, white, lime, green, turquoise, teal
-const LIVERY = ["#7d1d34", "#d8383d", "#f28a22", "#f4f4f0", "#c9d43a", "#3aae4a", "#2bb0b4", "#14888a"]
+const LIVERY = XMAS ? ["#15161c", "#15161c", "#00b2a9", "#15161c", "#ef426f", "#15161c", "#ff8200", "#1a3b30"]   // Christmas: a dark wrap, three tab-colour stripes, a deep green nose
+                    : ["#7d1d34", "#d8383d", "#f28a22", "#f4f4f0", "#c9d43a", "#3aae4a", "#2bb0b4", "#14888a"]
 function bus(t) {
   const L = 760, Hb = 210, x0 = 580, base = 872
   ctx.textAlign = "left"
@@ -207,6 +214,12 @@ function bus(t) {
     const px = x0 + 40 + (pane + at) * bandW / 5, hy = by + (stand ? 24 : 38) + Math.sin(TAU * cycles(k) * t / T + pane * 2 + at * 5) * 1.2
     ctx.beginPath(); ctx.arc(px, hy, 10, 0, TAU); ctx.fill()
     ctx.beginPath(); ctx.ellipse(px, hy + 30, 21, 17, 0, Math.PI, 0); ctx.fill(); ctx.fillRect(px - 21, hy + 30, 42, by + bh - hy - 30)
+    if (XMAS) {                                                           // Santa hats and elf hats
+      const elf = (pane + Math.round(at * 10)) % 2, c = elf ? ["#00b2a9", "#ef426f", "#ff8200"][pane % 3] : "#d8343c"
+      ctx.save(); ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(px - 11, hy - 5); ctx.lineTo(px + 11, hy - 5); ctx.lineTo(px + (elf ? 2 : 14), hy - (elf ? 26 : 20)); ctx.closePath(); ctx.fill()
+      ctx.fillStyle = elf ? "#ffd343" : "#f4f4f4"; ctx.fillRect(px - 12, hy - 7, 24, 4); ctx.beginPath(); ctx.arc(px + (elf ? 2 : 14), hy - (elf ? 26 : 20), 3.5, 0, TAU); ctx.fill(); ctx.restore()
+      ctx.fillStyle = N("rgba(26,20,14,.85)", "rgba(70,76,84,.9)")
+    }
   }
   // the windshield, wrapping the nose, and the driver
   ctx.fillStyle = "#262a30"; rr(x0 + L - 70, y0 + 22, 58, Hb - 70, 12); ctx.fill()
@@ -259,7 +272,7 @@ function bus(t) {
   // each scrolling in, holding, and scrolling out (10 s each, so the loop closes on the first)
   const sx = x0 + L - 330, sw2 = 250
   ctx.fillStyle = "#111"; rr(sx, y0 + 7, sw2, 20, 4); ctx.fill()
-  const c = t % 10, msg = ["devsa.community", "DEVSA FM"][Math.floor(t / 10) % 2]
+  const c = t % 10, msg = (XMAS ? ["feliz navidad", "DEVSA FM"] : ["devsa.community", "DEVSA FM"])[Math.floor(t / 10) % 2]
   const tx = sx + 14 + (c < 1 ? (1 - c) * sw2 : c > 8.6 ? -(c - 8.6) * (sw2 + 40) : 0)
   ctx.save(); ctx.beginPath(); ctx.rect(sx + 4, y0 + 7, sw2 - 8, 20); ctx.clip()
   ctx.fillStyle = "#ffb43a"; ctx.font = '700 14px "Geist Mono"'; ctx.textBaseline = "middle"; ctx.letterSpacing = msg === "DEVSA FM" ? "3px" : "0px"
@@ -322,6 +335,78 @@ function oncoming(t) {
   ctx.fillStyle = "#0b0c0e"; ctx.beginPath(); ctx.arc(x + 40, y - 4, 13, 0, TAU); ctx.arc(x + 142, y - 4, 13, 0, TAU); ctx.fill()
 }
 
+// Christmas: Mission San José and the boots outlined in bulbs, traced from the City's own icons: the icon is drawn
+// once offscreen where it stands in the scene, and a bulb goes wherever a grid point falls on its line
+const LIT = {}
+function buildLit(n, xCells, baseCells, wCells) {
+  if (!ICON[n] || LIT[n]) return
+  const k = n + "@" + wCells, im = ICON_IMG[k]; if (!im || !im.complete || !im.naturalWidth) return
+  const w = wCells * CELL, h = w * ICON[n].vb[3] / ICON[n].vb[2], x = xCells * CELL, y = baseCells * CELL - h
+  const c = document.createElement("canvas"); c.width = W; c.height = H; const cg = c.getContext("2d", { willReadFrequently: true })
+  cg.drawImage(im, x, y, w, h); const d = cg.getImageData(0, 0, W, H).data, pts = [], STEP = 22
+  for (let yy = Math.floor(y); yy < y + h; yy += STEP) for (let xx = Math.floor(x); xx < x + w; xx += STEP) {
+    let hit = null
+    for (let dy = 0; dy < STEP && !hit; dy += 2) for (let dx = 0; dx < STEP && !hit; dx += 2) if (d[((yy + dy) * W + xx + dx) * 4 + 3] > 120) hit = [xx + dx, yy + dy]
+    if (hit) pts.push(hit)
+  }
+  LIT[n] = pts
+}
+function xmasLitIcons(t) {
+  buildLit("sanjose", 14, HORIZON + 1, 34); buildLit("boots", 116, HORIZON + 1, 26)
+  const C = ["#ffd343", "#00b2a9", "#ef426f", "#ff8200", "#fff1d6"], step = Math.floor(t * 3)
+  ctx.save(); ctx.globalCompositeOperation = "lighter"
+  for (const n of ["sanjose", "boots"]) (LIT[n] || []).forEach(([x, y], i) => {
+    const c = C[(i + step) % C.length], on = (i + step) % 4 === 0 ? 1 : .6
+    const gr = ctx.createRadialGradient(x, y, 0, x, y, 12); gr.addColorStop(0, c + (on > .9 ? "99" : "55")); gr.addColorStop(1, c + "00"); ctx.fillStyle = gr; ctx.fillRect(x - 12, y - 12, 24, 24)
+    ctx.fillStyle = c; ctx.globalAlpha = .6 + .4 * on; ctx.beginPath(); ctx.arc(x, y, 3.5, 0, TAU); ctx.fill(); ctx.globalAlpha = 1
+  })
+  ctx.restore()
+}
+function xmasWreath(t) {                                  // a wreath on the bus's nose
+  const L = 760, Hb = 210, x0 = 580, base = 872, bob = Math.sin(TAU * 30 * t / T) * 1.4 + Math.sin(TAU * 11 * t / T) * 1, cx = x0 + L - 34, cy = base - Hb + bob + 160
+  ctx.strokeStyle = "#1f8a46"; ctx.lineWidth = 9; ctx.beginPath(); ctx.arc(cx, cy, 16, 0, TAU); ctx.stroke()
+  ctx.strokeStyle = "#5cc27e"; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, 16, 0, TAU); ctx.stroke()
+  ctx.fillStyle = "#e8323c"; ctx.fillRect(cx - 7, cy + 12, 14, 10)
+}
+// Christmas: bulbs along the bus roof, chasing; pixel snow; the sleigh
+const hash = (a, b) => { const s = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return s - Math.floor(s) }
+function xmasBusLights(t) {
+  const L = 760, Hb = 210, x0 = 580, base = 872, bob = Math.sin(TAU * 30 * t / T) * 1.4 + Math.sin(TAU * 11 * t / T) * 1, y = base - Hb + bob - 4
+  const C = [TEAL, PINK, ORANGE, "#ffd343", "#e8323c", "#2fd06a"], step = Math.floor(t * 4)
+  ctx.save(); ctx.globalCompositeOperation = "lighter"
+  for (let i = 0, x = x0 + 20; x < x0 + L - 20; x += 28, i++) {
+    const c = C[(i + step) % C.length], on = (i + step) % 3 === 0 ? 1 : .55
+    const gr = ctx.createRadialGradient(x, y, 0, x, y, 14); gr.addColorStop(0, c + (on > .9 ? "88" : "44")); gr.addColorStop(1, c + "00"); ctx.fillStyle = gr; ctx.fillRect(x - 14, y - 14, 28, 28)
+    ctx.fillStyle = c; ctx.globalAlpha = .55 + .45 * on; ctx.beginPath(); ctx.arc(x, y, 4.5, 0, TAU); ctx.fill(); ctx.globalAlpha = 1
+  }
+  ctx.restore()
+}
+const XFLAKE = ["...#...", "#..#..#", ".#.#.#.", "..###..", "#######", "..###..", ".#.#.#.", "#..#..#", "...#..."]
+const XFLAKES = Array.from({ length: 80 }, (_, i) => { const kind = i % 10 < 6 ? 0 : i % 10 < 9 ? 1 : 2
+  return { x: hash(i, 31) * W, ph: hash(i, 32), laps: kind === 2 ? 1 : 2, sw: 10 + hash(i, 33) * 30, kind, px: [4, 2, 4][kind], a: [.5, .6, .85][kind] } })
+function xmasSnow(t) {
+  for (const f of XFLAKES) {
+    const h = f.kind ? 9 * f.px : f.px, k = ((t / T) * f.laps + f.ph) % 1, y = Math.round((-h + k * (H + 2 * h)) / f.px) * f.px
+    const x = Math.round((f.x + Math.sin(TAU * f.laps * t / T + f.ph * 6) * f.sw) / f.px) * f.px
+    ctx.fillStyle = `rgba(255,255,255,${f.a})`
+    if (!f.kind) { ctx.fillRect(x, y, f.px, f.px); continue }
+    XFLAKE.forEach((row, ry) => [...row].forEach((c, rx) => { if (c === "#") ctx.fillRect(x + rx * f.px, y + ry * f.px, f.px, f.px) }))
+  }
+}
+function xmasSleigh(t) {                                  // passes spaced through the loop, alternating direction and height
+  const n = Math.max(2, Math.round(T / 30)), slot = T / n, i = Math.floor(t / slot), u = (t - i * slot - (slot - 13) / 2) / 13
+  if (u < 0 || u > 1) return
+  const dir = i % 2 ? -1 : 1, x = dir > 0 ? -500 + u * (W + 1000) : W + 500 - u * (W + 1000), y = (i % 2 ? 300 : 170) - 40 * Math.sin(u * Math.PI) + 12 * Math.sin(u * TAU * 3), px = 4
+  ctx.save(); ctx.globalCompositeOperation = "lighter"
+  for (let k = 1; k < 30; k++) { const sx = x - dir * (100 + k * 14), sy = y - 24 + Math.sin(k + t * 9) * 8; ctx.fillStyle = ["#ffd343", TEAL, "#ffd343", PINK, "#ffd343", ORANGE][k % 6]; ctx.globalAlpha = 1 - k / 30; ctx.fillRect(Math.round(sx / 4) * 4, Math.round(sy / 4) * 4, 4, 4) }
+  ctx.restore()
+  for (let k = 4; k >= 1; k--) { const [w, h] = xs.size(xs.DEER, px), leap = Math.floor(t * 6 + k) % 2, rx = x + dir * (110 + k * 84)
+    xs.spr(ctx, leap ? xs.DEER_LEAP : xs.DEER, { ...xs.PAL, N: xs.NOSE[k % 3] }, rx - w / 2, y - h + (leap ? -2 * px : 0), px, { flip: dir < 0 }) }
+  const [sw, sh] = xs.size(xs.SLEIGH, px)
+  ctx.save(); ctx.translate(x, y); if (dir < 0) ctx.scale(-1, 1)
+  xs.spr(ctx, xs.SACK, xs.PAL, -sw / 2 - 2 * px, -sh - 7 * px, px); xs.spr(ctx, xs.SANTA_SEATED, xs.PAL, -sw / 2 + 10 * px, -sh - 13 * px, px); xs.spr(ctx, xs.SLEIGH, xs.PAL, -sw / 2, -sh, px)
+  ctx.restore()
+}
 function render(t) {
   t = ((t % T) + T) % T
   paint(t)
@@ -336,7 +421,9 @@ function render(t) {
     ctx.fillText(ch, x * CELL + CELL / 2, y * CELL + CELL / 2 + 1)
   }
   if (NIGHT) { floodlights(t); oncoming(t) }
+  if (XMAS) { xmasLitIcons(t); xmasSleigh(t) }
   bus(t)
+  if (XMAS) { xmasBusLights(t); xmasWreath(t); xmasSnow(t) }
 
   // footer: who this is, and the music credit
   const cr = window.CREDITS && window.CREDITS.length ? window.CREDITS : ['"Tejano Lofi" by Patrick · made with Suno']
@@ -344,6 +431,7 @@ function render(t) {
   ctx.textAlign = "right"; ctx.textBaseline = "alphabetic"
   ctx.font = '500 20px "Geist"'; ctx.fillStyle = N("rgba(255,255,255,0.75)", "rgba(28,26,22,.8)")
   ctx.fillText("♪  " + line, W - 60, H - 52)
+  if (XMAS) { xs.radio(ctx, 60, H - 36 - xs.RADIO.length * 3, 3, (t / T * 24) % 1); return }
   ctx.textAlign = "left"; ctx.font = '700 22px "Geist Mono"'; ctx.fillStyle = N("rgba(255,255,255,0.8)", "rgba(28,26,22,.85)")
   ctx.letterSpacing = "3px"; ctx.fillText("DEVSA FM  ·  devsa.community", 60, H - 52); ctx.letterSpacing = "0px"
   const tw = 46

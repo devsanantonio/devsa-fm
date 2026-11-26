@@ -20,6 +20,9 @@
 #   cathedral            San Fernando at night, a DEVSA projection show  music-tejano/
 #   room                 the ASCII room                         music-tejano/ (DURATION=n for longer; runs faster than real time)
 #
+#   xmas                 the Christmas FM edition (from the day after Thanksgiving): popping into downtown spaces: the
+#                        DEVSA tree, the bus ride, movie night at Mission Marquee Plaza, the Express, holiday traffic past the Alamodome (next to the station),
+#                        La Villita, San Fernando's show, the River Walk parade, the taco truck, the New Year finale. Each synced to a track in music-xmas/ (ElevenLabs, see LICENSES.txt).
 #   mix                  the show: commute-night, fish, court, taco, rand, paseo, cathedral, riverwalk. Each
 #                        scene is synced to one song (the table in scene_env) and changes when the
 #                        song ends, so a cut always lands on a song change.
@@ -40,15 +43,17 @@ _DUR="${DURATION:-}"                       # DURATION or MUSIC_DIR given on the 
 _MUSIC="${MUSIC_DIR:-}"
 [ -f config.env ] && source config.env
 DURATION="${_DUR:-${DURATION:-9000}}"     # 2.5 hours
-MIX_ORDER=(commute-night fish court taco rand paseo cathedral riverwalk)   # an evening: calm, calm, the game, a breather, the concert,
+MIX_ORDER=(commute-night fish court taco rand paseo cathedral riverwalk)
+XMAS_ORDER=(xmas-tree commute-xmas xmas-marquee xmas-express dome-xmas xmas-lavillita cathedral-xmas riverwalk-xmas taco-xmas xmas-finale)   # opens and closes on the two DEVSA TV desk graphics (ep1 tree, ep2 fireworks)
+                                                                                           # the plaza, the truck, then fireworks   # an evening: calm, calm, the game, a breather, the concert,
                                                                             # then the walk downtown: Market Square, San Fernando, the river
 
 TEST=0; SCENE_NAME=riverwalk
 for arg in "$@"; do
   case "$arg" in
     --test) TEST=1 ;;
-    riverwalk|commute|commute-night|rand|market|taco|court|fish|dome|grocery|paseo|cathedral|room|mix) SCENE_NAME="$arg" ;;
-    *) echo "Unknown argument: $arg (scenes: riverwalk, commute, commute-night, rand, market, taco, court, fish, dome, grocery, paseo, cathedral, room, mix)" >&2; exit 1 ;;
+    riverwalk|commute|commute-night|rand|market|taco|court|fish|dome|grocery|paseo|cathedral|room|mix|xmas) SCENE_NAME="$arg" ;;
+    *) echo "Unknown argument: $arg (scenes: riverwalk, commute, commute-night, rand, market, taco, court, fish, dome, grocery, paseo, cathedral, room, mix, xmas)" >&2; exit 1 ;;
   esac
 done
 
@@ -81,6 +86,29 @@ scene_env() {
   LOOP_SECONDS=60
   export LOOP_SECONDS
   export MUSIC_DIR="${_MUSIC:-$SCENE_MUSIC}"
+  # the Christmas edition: its own pages, the ?xmas switch on the year-round ones, and music-xmas/
+  local xsong=""
+  case "$name" in
+    commute-xmas)   SCENE=commute.html;   SCENE_QUERY=xmas; xsong=tamal ;;
+    xmas-tree)      SCENE=xmas-tree.html;    xsong=tree ;;
+    xmas-marquee)   SCENE=xmas-marquee.html; xsong=tree ;;   # movie night at Mission Marquee Plaza; devsa.community's hero photos on its screen
+    xmas-express)   SCENE=xmas-express.html; xsong=cartridge ;;
+    riverwalk-xmas) SCENE=riverwalk.html; SCENE_QUERY=xmas; xsong=nocturne ;;
+    cathedral-xmas) SCENE=cathedral.html; SCENE_QUERY=xmas; xsong=mistletoe ;;
+    xmas-lavillita) SCENE=xmas-lavillita.html; xsong=nocturne ;;
+    dome-xmas)      SCENE=dome.html;      SCENE_QUERY=xmas; xsong=mistletoe ;;   # not cartridge: the Express, just before it, has that one
+    taco-xmas)      SCENE=taco.html;      SCENE_QUERY=xmas; xsong=tamal ;;
+    xmas-finale)    SCENE=xmas-finale.html;  xsong=spark ;;
+  esac
+  case "$xsong" in
+    nocturne)  SYNC=beats-xmas-river-walk-nocturne.json;        SYNC_AUDIO="music-xmas/River Walk Nocturne.wav" ;;
+    cartridge) SYNC=beats-xmas-christmas-cartridge-glow.json;   SYNC_AUDIO="music-xmas/Christmas Cartridge Glow.wav" ;;
+    mistletoe) SYNC=beats-xmas-midnight-mistletoe-cumbia.json;  SYNC_AUDIO="music-xmas/Midnight Mistletoe Cumbia.wav" ;;
+    tree)      SYNC=beats-xmas-by-the-tree-at-midnight.json;    SYNC_AUDIO="music-xmas/By the Tree at Midnight.wav" ;;
+    spark)     SYNC=beats-xmas-midnight-spark.json;             SYNC_AUDIO="music-xmas/Midnight Spark.wav" ;;   # trimmed to 2:00
+    tamal)     SYNC=beats-xmas-midnight-tamal-loop.json;        SYNC_AUDIO="music-xmas/Midnight Tamal Loop.wav" ;;   # trimmed to 2:00
+  esac
+  if [ -n "$xsong" ]; then export SCENE SCENE_QUERY SYNC SYNC_AUDIO; export MUSIC_DIR=music-xmas; fi
   LOOP="out/loop-${name}.mp4"
 }
 
@@ -108,7 +136,8 @@ else
 fi
 mkdir -p out
 
-if [ "$SCENE_NAME" = mix ]; then
+if [ "$SCENE_NAME" = mix ] || [ "$SCENE_NAME" = xmas ]; then
+  [ "$SCENE_NAME" = xmas ] && MIX_ORDER=("${XMAS_ORDER[@]}")
   # 1. one segment per scene, as long as its music, with the music inside it. The scenes'
   # pictures don't change day to day, so a loop is rendered only when it's missing.
   : > out/mixlist.txt; round=0

@@ -87,6 +87,9 @@ const fm = (() => {
     // a contributed scene credits its maker: set window.SCENE_BY = "Name or @handle" in the scene
     if (window.SCENE_BY) { ctx.font = '500 17px "Geist"'; ctx.fillStyle = "rgba(255,255,255,0.6)"; ctx.fillText("scene by " + window.SCENE_BY, W - 60, H - 80) }
     ctx.textAlign = "left"; ctx.font = '700 22px "Geist Mono"'; ctx.fillStyle = "rgba(255,255,255,0.8)"
+    // a scene may draw the DEVSA FM sprite in place of the words: window.FOOTER_SPRITE(x, bottom, t) draws it
+    // standing on `bottom`. It stands alone, like the mark: no address beside it (that lives in the description)
+    if (window.FOOTER_SPRITE) { window.FOOTER_SPRITE(60, H - 36, t); return }
     ctx.letterSpacing = "3px"; ctx.fillText("DEVSA FM  ·  devsa.community", 60, H - 52); ctx.letterSpacing = "0px"
     ;[TEAL, PINK, ORANGE].forEach((c, i) => { ctx.fillStyle = c; ctx.fillRect(60 + i * 52, H - 40, 46, 6) })
   }
