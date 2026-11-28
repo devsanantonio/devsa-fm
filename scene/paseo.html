@@ -22,11 +22,26 @@
   The walls, floor and tree are ASCII, tinted by material (green arcade, red brick); everything that
   gives light is drawn in colour on top. 1920x1080, a seamless loop: render(t) draws a frame.
   The older market.html is Market Square by day, at Fiesta.
+
+  ?xmas, the Christmas edition: the lotería becomes a gift station, a small software factory with three steps: wrap,
+  check, ship. The caller now calls a gift request, lotería style, its name and verse in the bubble; the teal agent wraps
+  it (a box, then paper, then the ribbon); an elf checks it and stamps it; then it ships, sliding past Tux, whose laptop
+  logs it, into Santa's sack. Once a round the elf sends one back with a red stamp and the agent rewraps it. The easel
+  holds a board with the three steps, the current one lit. Papel picado in Christmas colours with warm lights along the
+  strings and Christmas cuts (la estrella, la nochebuena, la campana, a snowflake, with { } and </> and the DEVSA mark
+  kept), the big tree at the far end lit, luminarias along the arcade, nochebuenas in pots at its piers, a wreath and
+  bow on the lamp post, the strollers carrying gifts. Seven gifts a loop slide off the table's end and drop into Santa's
+  sleigh, parked on the pavers with one reindeer harnessed; Tux's log counts them. The last fifteen seconds are Santa's:
+  he walks across the front of the paseo, hops into the sleigh and waves, and everyone cheers.
+   Pixel snow, the conjunto still playing under the lamp post. Footer: the
+  DEVSA FM radio.
 -->
 <canvas id="c" width="1920" height="1080"></canvas>
 <script src="plush.js"></script>
 <script src="fmkit.js"></script>
+<script src="xmas-sprites.js"></script>
 <script>
+const XMAS = new URLSearchParams(location.search).has("xmas")   // Christmas: see the ?xmas notes in the header
 const { W, H, TAU, CELL, COLS, ROWS, TEAL, PINK, ORANGE, ctx, g, LT, lerp, clamp01, ease, hash, glow, lit, footer, loadImg } = fm
 
 // --- the world: x across, y up, z away; the paseo is 10.8 wide, the eye 1.6 up -------------------
@@ -127,9 +142,23 @@ function lampPost() {
 // the DEVSA mark's light shapes (the three tabs, the chevron, SA, the cursor), from devsa-alt-logo.svg:
 // on the mark's flags they are cut through the paper, so they glow, the way the mark's light parts do
 const MARK_CUTS = new Path2D("M250.28 0H485.25V91.95H250.28z M234.97 0H30.65C13.8 0 0 13.8 0 30.65v61.3h234.97V0zM705.05 0H500.59v91.95H735.7v-61.3C735.7 13.8 721.9 0 705.05 0zM352.52 459.82c0 9.2 6.14 15.34 15.34 15.34h245.23c9.2 0 15.34-6.140 15.34-15.34v-45.99c0-9.2-6.14-15.34-15.34-15.34H367.83c-9.2 0-15.34 6.14-15.34 15.34v45.99h.03zM193.13 320.33l-95.04 95.04c-7.66 7.66-7.66 18.4 0 24.51l27.59 27.59c7.66 7.66 18.4 7.66 24.51 0l134.89-134.89c6.76-5.64 7.710-15.68 2.08-22.43-.62-.76-1.32-1.46-2.08-2.08L150.19 173.18c-6.14-6.14-18.4-6.14-24.51 0l-27.59 27.59c-7.66 6.14-7.66 16.85 0 24.51l95.04 95.04zM370.33 359.62c-11.28-8.54-17.23-20.81-17.830-36.83l49.22 1.13c.5 8.5 4.16 12.83 10.97 12.98 2.5.06 4.63-.48 6.4-1.63 1.76-1.14 2.68-2.96 2.73-5.47.08-3.47-1.73-6.33-5.44-8.58-3.71-2.24-9.49-4.84-17.35-7.81-9.38-3.55-17.13-7-23.24-10.34-6.12-3.34-11.33-8.12-15.63-14.34-4.31-6.22-6.28-14.13-5.92-23.72.22-9.59 2.88-17.71 7.97-24.34 5.09-6.63 11.95-11.58 20.58-14.86 8.63-3.28 18.3-4.8 29.01-4.55 18.07.42 32.34 4.92 42.78 13.51 10.45 8.59 15.77 20.47 15.98 35.63l-49.85-1.15c-.04-4.17-1.02-7.19-2.92-9.04-1.91-1.85-4.25-2.81-7.03-2.87-1.95-.05-3.56.58-4.84 1.87-1.28 1.29-1.95 3.12-2 5.48-.08 3.34 1.7 6.13 5.34 8.37 3.63 2.24 9.45 4.98 17.45 8.23 9.23 3.69 16.84 7.21 22.82 10.54 5.97 3.34 11.12 7.91 15.44 13.71 4.32 5.81 6.38 13.020 6.18 21.64-.21 9.04-2.62 17.09-7.23 24.15-4.62 7.06-11.21 12.51-19.78 16.34-8.58 3.84-18.7 5.62-30.38 5.35-17.66-.41-32.13-4.88-43.41-13.42zM573.28 348.25l-48.5-.28-7.32 21.95-47.88-.28 54.06-145.19 52.61.3 52.18 145.8-48.09-.28-7.07-22.03zm-11.87-30.27l-13.62-40.33-12.68 40.63 26.3-.31z")
-const PAPER = [PINK, TEAL, ORANGE, "#ffd166", TEAL, PINK, "#9b5de5", ORANGE, "#7bd88f"]
+const PAPER = XMAS ? ["#e8323c", "#2fa356", "#ffd166", "#f4efe6", TEAL, PINK, "#e8323c", "#2fa356", "#ffd166"] : [PINK, TEAL, ORANGE, "#ffd166", TEAL, PINK, "#9b5de5", ORANGE, "#7bd88f"]
 const CUTS = ["{ }", "star", "</>"]
-const STRINGS = [4.4, 5.9, 7.8, 10.4, 14]           // few enough that the arcade and the brick show
+const STRINGS = [4.4, 5.9, 7.8, 10.4, 14]
+// Christmas: the cuts Mexican papel picado has at Navidad, our own shapes, with { } and </> kept on a few
+const XCUTS = ["estrella", "nochebuena", "{ }", "campana", "flake", "estrella", "</>", "nochebuena", "campana", "flake"]
+const SNOWFLAKE = ["...#...", "#..#..#", ".#.#.#.", "..###..", "#######", "..###..", ".#.#.#.", "#..#..#", "...#..."]
+function xcut(cut, w, h) {                                   // the cut, centred on the flag, in the current fill
+  const cy = h * .46
+  if (cut === "estrella") { const R = w * .27, r = w * .11; ctx.beginPath(); for (let i = 0; i < 14; i++) { const a = -Math.PI / 2 + i * Math.PI / 7, rr = i % 2 ? r : R; ctx.lineTo(Math.cos(a) * rr, cy + Math.sin(a) * rr) } ctx.fill(); return true }
+  if (cut === "nochebuena") { for (let i = 0; i < 6; i++) { ctx.save(); ctx.translate(0, cy); ctx.rotate(i * Math.PI / 3); ctx.beginPath(); ctx.ellipse(0, -w * .13, w * .055, w * .13, 0, 0, TAU); ctx.fill(); ctx.restore() }
+    ctx.save(); ctx.globalCompositeOperation = "destination-out"; ctx.beginPath(); ctx.arc(0, cy, w * .045, 0, TAU); ctx.fill(); ctx.restore()
+    for (const [dx, dy] of [[0, 0], [-1, .7], [1, .7]]) { ctx.beginPath(); ctx.arc(dx * w * .025, cy + dy * w * .025 - w * .01, w * .014, 0, TAU); ctx.fill() } return true }
+  if (cut === "campana") { const b = w * .22; ctx.beginPath(); ctx.moveTo(-b * .2, cy - b * .9); ctx.lineTo(b * .2, cy - b * .9); ctx.quadraticCurveTo(b * .75, cy - b * .7, b * .8, cy + b * .5); ctx.lineTo(b, cy + b * .72); ctx.lineTo(-b, cy + b * .72); ctx.lineTo(-b * .8, cy + b * .5); ctx.quadraticCurveTo(-b * .75, cy - b * .7, -b * .2, cy - b * .9); ctx.fill()
+    ctx.beginPath(); ctx.arc(0, cy - b * 1.02, b * .14, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.arc(0, cy + b * .9, b * .16, 0, TAU); ctx.fill(); return true }
+  if (cut === "flake") { const q = w * .055; SNOWFLAKE.forEach((row, ry) => [...row].forEach((c, rx) => { if (c === "#") ctx.fillRect((rx - 3.5) * q, cy + (ry - 4.5) * q, q, q) })); return true }
+  return false
+}           // few enough that the arcade and the brick show
 function sparkle(x, y, r) {                                // a four-point star, the sign AI products use
   const q = r * .16
   ctx.beginPath(); ctx.moveTo(x, y - r); ctx.quadraticCurveTo(x + q, y - q, x + r, y); ctx.quadraticCurveTo(x + q, y + q, x, y + r)
@@ -148,8 +177,9 @@ function flag(x, y, w, h, i, k, sway, near) {
     if (mark) {                                             // the mark, cut through: its light shapes glow, the paper is its body
       const k2 = w * .58 / 735.7; ctx.save(); ctx.translate(-w * .29, h * .44 - 551.77 * k2 / 2); ctx.scale(k2, k2); ctx.fill(MARK_CUTS); ctx.restore()
     } else {
-      const cut = CUTS[(i + k) % CUTS.length]
-      if (cut === "star") { sparkle(0, h * .46, w * .2); sparkle(w * .2, h * .3, w * .08) }   // the AI sparkle, and its little one
+      const cut = (XMAS ? XCUTS : CUTS)[(i + k) % (XMAS ? XCUTS : CUTS).length]
+      if (XMAS && xcut(cut, w, h)) {}
+      else if (cut === "star") { sparkle(0, h * .46, w * .2); sparkle(w * .2, h * .3, w * .08) }   // the AI sparkle, and its little one
       else { ctx.font = `700 ${Math.round(w * .3)}px "Geist Mono"`; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(cut, 0, h * .46) }
     }
     ctx.shadowBlur = 0; ctx.fillStyle = "rgba(255,244,214,.7)"
@@ -167,6 +197,8 @@ function papelPicado(t, from, to = 99) {
     const n = 13, at = u => P(lerp(-HALF, HALF, u), 4.7 - .55 * Math.sin(u * Math.PI), z)
     ctx.strokeStyle = "rgba(255,255,255,.25)"; ctx.lineWidth = Math.max(1, 4 / z); ctx.beginPath()
     for (let i = 0; i <= 40; i++) { const [x, y] = at(i / 40); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y) } ctx.stroke()
+    if (XMAS) for (let i = 0; i <= n; i++) { const [x, y] = at(i / n), r = Math.max(2, 26 / z)   // warm bulbs between the flags
+      lit(() => glow(x, y, r * 3, r * 3, "rgba(255,226,170,.5)")); ctx.fillStyle = "#fff1c8"; ctx.beginPath(); ctx.arc(x, y + r, r, 0, TAU); ctx.fill() }
     for (let i = 0; i < n; i++) {
       const [x, y] = at((i + .5) / n), w = .62 * F / z, h = .74 * F / z
       const sway = Math.sin(TAU * (t / LT * 8) + i * .9 + k * 1.3) * .1 + .06 * fm.pulseAt(t)
@@ -399,7 +431,17 @@ function conjunto(t) {
   lit(() => glow(1570, 640, 190, 120, "rgba(255,230,180,.18)"))
   drawPlush(ctx, { x: ax, y: ay, s, tint: TEAL, number: "", t, seed: 21, look: 4, mouth: .5 + .3 * fm.pulseAt(t), lean: .06, hold: true, liftPx: 3 * fm.pulseAt(t) })
   accordion(ax - 58 * s, ay - 72 * s, t, s)               // held across the body, over the face, as first drawn
-  if (PYSA.complete && PYSA.width) {
+  if (XMAS) {                                              // Christmas: an elf on guitarrón (the PySanAntonio mascot plays the Arneson stage)
+    const x = 1612, y = ay, px = 5, [w, h] = xs.size(xs.ELF, px), sway = Math.sin((t - OFF) / BEAT * Math.PI) * .05
+    ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.beginPath(); ctx.ellipse(x, y, 30, 6, 0, 0, TAU); ctx.fill()
+    ctx.save(); ctx.translate(x, y); ctx.rotate(sway)
+    xs.spr(ctx, xs.ELF, { ...xs.PAL, E: "#e8323c", S: "#c2875a", s: "#a06c44" }, -w / 2, -h - 2 * fm.pulseAt(t), px)
+    ctx.translate(-4, -h * .42); ctx.rotate(-.5)                                   // the guitarrón: a deep body, a short neck
+    ctx.fillStyle = "#7a4a22"; ctx.beginPath(); ctx.ellipse(0, 10, 30, 24, 0, 0, TAU); ctx.fill(); ctx.fillStyle = "#5a3418"; ctx.beginPath(); ctx.arc(0, 8, 8, 0, TAU); ctx.fill()
+    ctx.fillStyle = "#3a2410"; ctx.fillRect(-4, -48, 8, 40); ctx.fillStyle = "#e8c84a"; ctx.fillRect(-12, 30, 24, 3)
+    ctx.restore()
+  }
+  else if (PYSA.complete && PYSA.width) {
     const h = 116, w = h * PYSA.width / PYSA.height, x = 1612, y = ay, sway = Math.sin((t - OFF) / BEAT * Math.PI) * .045
     ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.beginPath(); ctx.ellipse(x, y, w * .36, 6, 0, 0, TAU); ctx.fill()
     ctx.save(); ctx.translate(x, y); ctx.rotate(sway); ctx.drawImage(PYSA, -w / 2, -h - 2 * fm.pulseAt(t), w, h); ctx.restore()
@@ -419,8 +461,237 @@ function strollers(t) {
     const u = ((t / a.sec + a.ph) % 1 + 1) % 1, there = u < .5, p = there ? u * 2 : (1 - u) * 2, z = a.z0 * Math.pow(a.z1 / a.z0, p)
     const [x, y] = P(a.x, 0, z)
     drawPlush(ctx, { x, y, s: 2.6 / z * 2.2, tint: a.tint, number: "", t, stride: TAU * 1.7 * t + a.x, run: 1, back: there, look: 0, mouth: .3, seed: a.n })
+    if (XMAS) { const gp = Math.max(1, Math.round(10 / z)), [gw, gh] = xs.size(xs.GIFT, gp); xs.spr(ctx, xs.GIFT, { ...xs.PAL, ...xs.WRAPS[a.n % xs.WRAPS.length] }, x + 34 * 2.6 / z * 2.2 * .5, y - 70 * 2.6 / z * 2.2 * .5 - gh, gp) }
   }
 }
+
+// ---- Christmas: the gift station, a small software factory: wrap, check, ship ----------------------
+const GOLD = "#ffd343", GREEN = "#2fd06a", RED = "#ff3b30"
+const GIFTS = [
+  { name: "EL TECLADO", verse: "Pa'l que escribe todo el día" },
+  { name: "LA TAZA", verse: "Café de olla pa' la junta" },
+  { name: "EL SUÉTER", verse: "Pa'l frío de diciembre" },
+  { name: "LOS STICKERS", verse: "Pa' la laptop nueva" },
+  { name: "EL LIBRO", verse: "Pa' aprender algo nuevo" },
+  { name: "LA CONCHA", verse: "Pan dulce pa'l camino" },
+]
+const GCYC = fm.T / 8, SENDBACK = 5                      // eight gifts a loop, one every 15 s; the sixth is sent back once
+const DRAFT_X = 820, ELF_X = 1040, TUX_X = 1265, SACK_X = 1385, TOP_Y = TABLE.back + 10
+function giftAt(t) {
+  const k = Math.floor(t / GCYC), u = (t % GCYC) / GCYC, back = k % 6 === SENDBACK, g = GIFTS[k % GIFTS.length]
+  if (k >= GIFTS_N) return { k: GIFTS_N - 1, u, g, back: false, step: "", x: 0, d: 1, stampAt: -1, red: false, gone: true, P: {} }
+  // phases: the call, wrap, to the elf, check (on a send-back: a red stamp, back to the agent, a rewrap, back again,
+  // approved), then act: along the table and into the sack
+  const P = back ? { call: .1, draft: .34, toElf: .38, stamp1: .44, backTo: .5, redraft: .6, toElf2: .64, stamp: .7, act: .92 }
+                 : { call: .1, draft: .42, toElf: .47, stamp: .58, act: .9 }
+  let step = "", x = DRAFT_X, d = 1, stampAt = -1, red = false, gone = false
+  if (u < P.call) { step = "call"; d = 0 }
+  else if (u < P.draft) { step = "wrap"; d = (u - P.call) / (P.draft - P.call) }
+  else if (u < P.toElf) { step = "check"; x = lerp(DRAFT_X, ELF_X, ease((u - P.draft) / (P.toElf - P.draft))) }
+  else if (back && u < P.stamp1) { step = "check"; x = ELF_X; stampAt = P.stamp1 - .03 }
+  else if (back && u < P.backTo) { step = "wrap"; red = true; x = lerp(ELF_X, DRAFT_X, ease((u - P.stamp1) / (P.backTo - P.stamp1))) }
+  else if (back && u < P.redraft) { step = "wrap"; d = .4 + .6 * (u - P.backTo) / (P.redraft - P.backTo) }
+  else if (back && u < P.toElf2) { step = "check"; x = lerp(DRAFT_X, ELF_X, ease((u - P.redraft) / (P.toElf2 - P.redraft))) }
+  else if (u < P.stamp) { step = "check"; x = ELF_X; stampAt = P.stamp - .03 }
+  else if (u < P.act) { step = "ship"; x = lerp(ELF_X, SACK_X, ease((u - P.stamp) / (P.act - P.stamp))) }
+  else { step = ""; gone = true }
+  return { k, u, g, back, step, x, d, stampAt, red, gone, P }
+}
+function giftBox(x, y, d, k, sc = 1) {                      // the gift as it's drafted: a plain box, then paper, then the ribbon
+  if (d < .34) { ctx.fillStyle = "#c9a26b"; ctx.fillRect(x - 28 * sc, y - 44 * sc, 56 * sc, 44 * sc); ctx.fillStyle = "#a8844e"; ctx.fillRect(x - 28 * sc, y - 44 * sc, 56 * sc, 7 * sc); return }
+  const wrap = xs.WRAPS[k % xs.WRAPS.length], map = d < .67 ? xs.GIFT.map(r => r.replace(/G/g, "P")) : xs.GIFT, px = 5 * sc, [gw, gh] = xs.size(map, px)
+  xs.spr(ctx, map, { ...xs.PAL, ...wrap }, x - gw / 2, y - gh, px)
+}
+// Tux's laptop: a silver lid with a dark bezel and a camera dot, the screen turned to us so the log reads, the hinge,
+// and the keyboard deck lying on the table in front of it, keys and a trackpad
+function laptop(cx, by, G) {
+  const lw = 250, lh = 158, deck = 30, lx = cx - lw / 2, ly = by - lh
+  lit(() => glow(cx, ly + lh / 2, 190, 130, "rgba(0,178,169,.12)"))
+  ctx.fillStyle = "#b8bcc4"; ctx.beginPath(); ctx.roundRect(lx, ly, lw, lh, 10); ctx.fill()                 // the lid
+  ctx.fillStyle = "#16181d"; ctx.beginPath(); ctx.roundRect(lx + 7, ly + 7, lw - 14, lh - 16, 6); ctx.fill()  // the bezel
+  ctx.fillStyle = "#3a3d44"; ctx.beginPath(); ctx.arc(cx, ly + 12, 2.5, 0, TAU); ctx.fill()                // the camera
+  const sx = lx + 14, sy = ly + 18, sw = lw - 28, sh = lh - 34
+  ctx.fillStyle = "#0e1a22"; ctx.fillRect(sx, sy, sw, sh)                                                  // the screen
+  ctx.font = '700 12px "Geist Mono"'; ctx.textAlign = "left"; ctx.textBaseline = "top"; ctx.fillStyle = PINK; ctx.fillText(">_ gifts.log", sx + 8, sy + 6)
+  const shippedN = Math.min(GIFTS_N, G.step === "" ? G.k + 1 : G.k), fin = G.done7
+  ctx.textAlign = "right"; ctx.fillStyle = fin ? GREEN : "rgba(200,230,226,.7)"; ctx.fillText(fin ? "7/7 shipped ✓" : shippedN + "/7", sx + sw - 8, sy + 6); ctx.textAlign = "left"
+  const done = G.step === "" ? G.k + 1 : G.k
+  const first = Math.max(0, done - 5)                     // the log fills from the top; the newest line in green
+  for (let j = first; j < done; j++) { ctx.fillStyle = j === done - 1 ? GREEN : "rgba(200,230,226,.7)"; ctx.fillText("✓ " + GIFTS[j % GIFTS.length].name.toLowerCase(), sx + 8, sy + 26 + (j - first) * 18) }
+  ctx.fillStyle = "#8e929a"; ctx.fillRect(lx + 18, by - 3, lw - 36, 5)                                     // the hinge
+  ctx.fillStyle = "#c9cdd4"; ctx.beginPath(); ctx.moveTo(lx, by); ctx.lineTo(lx + lw, by); ctx.lineTo(lx + lw + 22, by + deck); ctx.lineTo(lx - 22, by + deck); ctx.fill()   // the deck
+  ctx.fillStyle = "#9da1a9"; ctx.fillRect(lx - 22, by + deck, lw + 44, 4)
+  for (let r = 0; r < 3; r++) { const y = by + 4 + r * 6, inset = 10 - r * 4
+    for (let k = 0; k < 14; k++) { const x0 = lx + inset + k * (lw - 2 * inset) / 14; ctx.fillStyle = "#3a3d44"; ctx.fillRect(x0 + 1, y, (lw - 2 * inset) / 14 - 3, 4) } }   // the keys
+  ctx.fillStyle = "#b0b4bc"; ctx.fillRect(cx - 28, by + deck - 9, 56, 7)                                   // the trackpad
+}
+function giftStation(t) {
+  const G = giftAt(t)
+  // the wrapper (teal) and the checker (an elf), behind the table; the caller at the left end
+  const drafting = G.step === "wrap"
+  drawPlush(ctx, { x: DRAFT_X, y: 840, s: 1.5, tint: TEAL, number: "", t, seed: 3, look: 2, mouth: drafting || cheering(t) || santaNear(t, DRAFT_X) ? .8 : .3, armsUp: cheering(t) || (santaNear(t, DRAFT_X) && Math.sin(t * 7) > 0) || (drafting && Math.sin(t * 8) > 0), liftPx: 2 * fm.pulseAt(t) })
+  const calling = G.step === "call" || (G.step === "wrap" && G.d < .3)
+  const head = drawPlush(ctx, { x: CALLER.x, y: 800, s: 1.42, tint: CALLER.tint, number: "", t, seed: CALLER.seed, look: -2, mouth: calling || cheering(t) || santaNear(t, CALLER.x) ? .95 : .3, armsUp: calling || cheering(t) || (santaNear(t, CALLER.x) && Math.sin(t * 7 + 1) > 0), liftPx: 2 * fm.pulseAt(t) })
+  if (calling) { ctx.fillStyle = "#f6efdc"; ctx.fillRect(CALLER.x - 40, head.headY - 64, 80, 44); ctx.fillStyle = "#e8323c"; ctx.fillRect(CALLER.x - 40, head.headY - 64, 80, 8)
+    ctx.fillStyle = "#2a2622"; ctx.font = '700 11px "Geist Mono"'; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(G.g.name, CALLER.x, head.headY - 38) }   // the request, on a tag
+  const px = 12, [ew, eh] = xs.size(xs.ELF, px), elfWave = santaNear(t, ELF_X) && Math.sin(t * 7) > 0
+  xs.spr(ctx, xs.ELF, { ...xs.PAL, E: GREEN, S: "#e0a87e", s: "#c48a60" }, ELF_X - ew / 2 + 40, TOP_Y - eh + 62, px, { flip: true })
+  if (elfWave) { ctx.fillStyle = "#e0a87e"; ctx.fillRect(ELF_X - ew / 2 + 40 - px, TOP_Y - eh + 62 + 4 * px, 2 * px, 3 * px) }   // waving at Santa
+  // Tux at his laptop: the screen logs what has shipped
+  if (PENGUIN.complete && PENGUIN.width) { const h = 150, w = h * PENGUIN.width / PENGUIN.height; ctx.imageSmoothingEnabled = false; ctx.drawImage(PENGUIN, TUX_X - w / 2, TABLE.back - TH - h + 34 + Math.sin(t * 2.2) * 2 - (cheering(t) ? Math.abs(Math.sin(t * 7)) * 18 : 0), w, h); ctx.imageSmoothingEnabled = true }
+  folding()
+  laptop(TUX_X, TABLE.back + 8, { ...G, done7: santaU(t) > .6 })
+  // Santa's sack at the table's right end
+  parkedSleigh(t, Math.min(GIFTS_N, G.step === "" ? G.k + 1 : G.k))
+  // the gift
+  if (!G.gone && G.step !== "call") {
+    let y = TOP_Y, sc = 1.4
+    if (G.step === "ship" && G.x > SACK_X - 80) { const a = clamp01((G.x - (SACK_X - 80)) / 80)   // off the end of the table, down into the sleigh
+      G.x = lerp(SACK_X - 80, BED[0] + 60, a); y = lerp(TOP_Y, BED[1], a) - Math.sin(a * Math.PI) * 70; sc = 1.4 * (1 - .45 * a) }
+    giftBox(G.x, y, G.d, G.k, sc)
+    if (G.red) { ctx.strokeStyle = RED; ctx.lineWidth = 7; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(G.x - 14, y - 104); ctx.lineTo(G.x + 14, y - 76); ctx.moveTo(G.x + 14, y - 104); ctx.lineTo(G.x - 14, y - 76); ctx.stroke()
+      lit(() => glow(G.x, y - 90, 30, 30, "rgba(255,59,48,.4)")) }
+    if (G.step === "ship" && G.x < SACK_X - 120) { ctx.fillStyle = GREEN; ctx.font = '700 34px "Geist Mono"'; ctx.textAlign = "center"; ctx.fillText("✓", G.x, y - 74) }
+  }
+  // the elf's stamp: raised in its hand, coming down on the gift when it checks it (red on a send-back)
+  const down = G.stampAt >= 0 && G.u > G.stampAt, isRed = G.back && G.u < G.P.backTo
+  const stx = down ? ELF_X : ELF_X + 112, sty = down ? TOP_Y - 76 : TOP_Y - 96
+  ctx.fillStyle = "#6a4a2a"; ctx.fillRect(stx - 8, sty - 44, 16, 44); ctx.fillStyle = "#4a3018"; ctx.beginPath(); ctx.arc(stx, sty - 46, 11, 0, TAU); ctx.fill()
+  ctx.fillStyle = isRed && G.step !== "ship" ? RED : GREEN; ctx.fillRect(stx - 28, sty, 56, 16)
+  // the easel: a board with the three steps, the current one lit
+  { const x = 330, y = 610, w = 190, h = 250
+    ctx.strokeStyle = "#6b4a2e"; ctx.lineWidth = 8; ctx.lineCap = "round"
+    ctx.beginPath(); ctx.moveTo(x - 60, 935); ctx.lineTo(x, 470); ctx.lineTo(x + 60, 935); ctx.moveTo(x, 480); ctx.lineTo(x + 10, 935); ctx.stroke()
+    lit(() => glow(x, y, 210, 260, "rgba(255,226,170,.14)"))
+    ctx.fillStyle = "#101216"; ctx.beginPath(); ctx.roundRect(x - w / 2, y - h / 2, w, h, 10); ctx.fill(); ctx.strokeStyle = "#3a3b44"; ctx.lineWidth = 3; ctx.stroke()
+    ctx.font = '700 18px "Geist Mono"'; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = PINK; ctx.fillText(">_ gift station", x, y - h / 2 + 30)
+    ;["wrap", "check", "ship"].forEach((s, i) => { const on = G.step === s, yy = y - 40 + i * 56
+      if (on) lit(() => glow(x, yy, 70, 26, "rgba(47,208,106,.35)"))
+      ctx.fillStyle = on ? GREEN : "rgba(230,232,238,.4)"; ctx.font = '700 22px "Geist Mono"'; ctx.fillText(s, x, yy)
+      if (i < 2) { ctx.fillStyle = "rgba(230,232,238,.35)"; ctx.font = '700 16px "Geist Mono"'; ctx.fillText("↓", x, yy + 28) } }) }
+  // the call: the request's name and verse in the bubble over the easel
+  if (G.step === "call" || (G.step === "wrap" && G.d < .4)) {
+    const a = Math.min(1, G.u / .03, (0.4 * (G.P.draft - G.P.call) + G.P.call - G.u) / .03 + 1)
+    ctx.save(); ctx.globalAlpha = Math.max(0, Math.min(1, a))
+    ctx.font = '700 22px "Geist Mono"'; const w1 = ctx.measureText(G.g.name).width; ctx.font = '500 18px "Geist"'; const w2 = ctx.measureText(G.g.verse).width
+    const w = Math.max(w1, w2) + 44, tx = 330, x = Math.max(36, tx - w / 2), y = 372, h = 74
+    ctx.fillStyle = "rgba(12,14,18,.94)"; ctx.beginPath(); ctx.roundRect(x, y, w, h, 14); ctx.fill(); ctx.strokeStyle = ORANGE; ctx.lineWidth = 2; ctx.stroke()
+    ctx.textAlign = "left"; ctx.textBaseline = "middle"; ctx.font = '700 22px "Geist Mono"'; ctx.fillStyle = "#fff"; ctx.fillText(G.g.name, x + 22, y + 24)
+    ctx.font = '500 18px "Geist"'; ctx.fillStyle = "rgba(255,255,255,.8)"; ctx.fillText(G.g.verse, x + 22, y + 52); ctx.restore()
+  }
+}
+// Santa's sleigh, parked on the pavers past the table's right end, one reindeer harnessed in front. Each checked gift
+// slides off the end of the table and drops into the sleigh, piling up. The last of eight cycles is Santa's: when the
+// seventh gift is in, he walks across the front of the paseo, hops into the sleigh and waves, and everyone cheers.
+// He's gone and the sleigh empty again when the loop starts over, at the cut to the next scene
+const GIFTS_N = 7, S0 = GCYC * GIFTS_N
+const santaU = t => (t - S0) / GCYC                         // 0..1 through Santa's cycle; < 0 before it
+const cheering = t => { const u = santaU(t); return u > .76 && u < .97 }
+const walkX = u => lerp(-120, SLX - 30, u / .56)
+const santaNear = (t, x) => { const u = santaU(t); return u > 0 && u < .56 && Math.abs(walkX(u) - x) < 180 }   // Santa passing this spot
+const SLX = 1300, SLB = 985, SLP = 12                       // the sleigh: in front of the table's right end, at the table's scale
+const BED = [SLX + 80, SLB - 10 * SLP + 26]                 // where a gift lands in it, at the back
+const SANTA_STEP = xs.SANTA.slice(0, 20).concat(["...rrrrrr....rrrrr..", "..rrrrrr......rrrrr.", "..KKKKKKK.....KKKKKK", "..KkKKKKK.....KkKKKK"])
+function giftPile(shipped) {                                // the gifts in the back of the sleigh, stacked three to a row, behind its side
+  for (let i = 0; i < shipped; i++) { const gp = 5, [gw, gh] = xs.size(xs.GIFT, gp), row = Math.floor(i / 3)
+    xs.spr(ctx, xs.GIFT, { ...xs.PAL, ...xs.WRAPS[i % xs.WRAPS.length] }, SLX + 24 + (i % 3) * (gw + 4) + row * 26, SLB - 10 * SLP + 26 - gh - row * (gh - 10), gp) }
+}
+function parkedSleigh(t, shipped) {
+  const [sw, sh] = xs.size(xs.SLEIGH, SLP), u = santaU(t), seated = u > .66
+  ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.beginPath(); ctx.ellipse(SLX + sw / 2 + 90, SLB + 6, sw * .8, 14, 0, 0, TAU); ctx.fill()
+  giftPile(shipped)
+  if (seated) { const sp = 9, wave = cheering(t) && Math.sin(t * 7) > 0, sx = SLX + sw - 19 * sp, sy = SLB - sh - 17 * sp + 30   // at the front, by the reindeer
+    const look = u > .68 && u < .76, lean = look ? -.12 : 0                        // he leans toward Tux's screen and gives it a check
+    ctx.save(); ctx.translate(sx + 10 * sp, sy + 18 * sp); ctx.rotate(lean); xs.spr(ctx, xs.SANTA_SEATED, xs.PAL, -10 * sp, -18 * sp, sp); ctx.restore()
+    if (wave) { ctx.fillStyle = "#e8323c"; ctx.fillRect(sx + 17 * sp, sy + 4 * sp, 2 * sp, 5 * sp); ctx.fillStyle = "#f4f4f4"; ctx.fillRect(sx + 17 * sp, sy + 3 * sp, 2 * sp, sp) }
+    if (look) { const bx = sx - 20, by = sy - 10                                     // his check, in a bubble toward the screen
+      ctx.fillStyle = "rgba(12,14,18,.94)"; ctx.beginPath(); ctx.roundRect(bx - 60, by - 54, 64, 48, 12); ctx.fill(); ctx.strokeStyle = GREEN; ctx.lineWidth = 2; ctx.stroke()
+      ctx.fillStyle = GREEN; ctx.font = '700 30px "Geist Mono"'; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText("✓", bx - 28, by - 29) } }
+  xs.spr(ctx, xs.SLEIGH, xs.PAL, SLX, SLB - sh, SLP)
+  // the reindeer in front, harnessed, shifting its weight; bells on its harness
+  const dp = 10, [dw, dh] = xs.size(xs.DEER, dp), dx = SLX + sw + 6, leap = cheering(t) && Math.floor(t * 4) % 2 === 1
+  ctx.strokeStyle = "rgba(255,211,67,.7)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(SLX + sw - 8, SLB - sh + 14); ctx.lineTo(dx + dw * .55, SLB - dh * .55); ctx.stroke()
+  lit(() => glow(dx + dw * .92, SLB - dh * .6, 16, 16, fm.rgba(TEAL, .55)))
+  const waiting = t > GCYC * 5.5 && u < .1                                         // from the sixth gift: it looks back for Santa, bells swaying
+  xs.spr(ctx, leap ? xs.DEER_LEAP : xs.DEER, { ...xs.PAL, N: TEAL }, dx, SLB - dh + (leap ? -2 * dp : Math.round(Math.sin(t * 1.5) * 1)), dp, { flip: waiting && Math.floor(t / 2.5) % 2 === 0 })
+  ctx.fillStyle = GOLD; for (let k = 0; k < 3; k++) { const sw2 = waiting || cheering(t) ? Math.sin(t * 9 + k) * 4 : 0; ctx.beginPath(); ctx.arc(dx + dw * .5 + k * 9 + sw2, SLB - dh * .42 + Math.abs(sw2) * .5, 4, 0, TAU); ctx.fill() }
+}
+function santaWalk(t) {                                     // Santa crosses the front of the paseo, then hops into the sleigh
+  const u = santaU(t); if (u < 0 || u > .66) return
+  const px = 9, foot = 1000, end = SLX - 30
+  let x, y = foot, map = xs.SANTA
+  if (u < .56) { x = walkX(u); map = Math.floor(t * 4) % 2 ? SANTA_STEP : xs.SANTA; y = foot - Math.abs(Math.sin(t * 8)) * 4 }
+  else { const a = (u - .56) / .1; x = lerp(end, SLX + 250, a); y = lerp(foot, SLB - 70, a) - Math.sin(a * Math.PI) * 140 }   // the hop, into the front seat
+  const [w, h] = xs.size(map, px)
+  ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.beginPath(); ctx.ellipse(x, foot + 2, 60, 10, 0, 0, TAU); ctx.fill()
+  xs.spr(ctx, map, xs.PAL, x - w / 2, y - h, px)
+  if (u < .56 && x > TABLE.x0 - 100 && x < TABLE.x1 && Math.sin(t * 7) > 0) { ctx.fillStyle = "#e8323c"; ctx.fillRect(x + 6 * px, y - h + 5 * px, 2 * px, 6 * px); ctx.fillStyle = "#f4f4f4"; ctx.fillRect(x + 6 * px, y - h + 4 * px, 2 * px, px) }   // waving to the table
+}
+// a wreath: a full ring of greenery in three greens, red berries, warm lights woven in, a red bow with tails
+const WREATH_DOTS = (() => { const out = []; let sd = 7; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647
+  for (let i = 0; i < 240; i++) { const a = r() * TAU, d = .62 + r() * .5; out.push([Math.cos(a) * d, Math.sin(a) * d, r()]) } return out })()
+function wreath(x, y, R, t) {
+  const p = Math.max(3, Math.round(R / 8))
+  ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.beginPath(); ctx.arc(x + 3, y + 4, R * 1.05, 0, TAU); ctx.fill()
+  for (const [dx, dy, k] of WREATH_DOTS) { ctx.fillStyle = k < .35 ? "#1d5a32" : k < .75 ? "#2a7a42" : "#3f9a56"; ctx.fillRect(Math.round(x + dx * R) - p * .7, Math.round(y + dy * R) - p * .7, p * 1.4, p * 1.4) }
+  WREATH_DOTS.forEach(([dx, dy], i) => { if (i % 11) return; ctx.fillStyle = "#d6223a"; ctx.fillRect(Math.round(x + dx * R * .95) - p / 2, Math.round(y + dy * R * .95) - p / 2, p, p) })
+  for (let i = 0; i < 8; i++) { const a = i * TAU / 8 + .3, lx = x + Math.cos(a) * R * .85, ly = y + Math.sin(a) * R * .85, tw = .75 + .25 * Math.sin(TAU * 2 * t / fm.T + i)
+    lit(() => glow(lx, ly, 9, 9, `rgba(255,220,150,${(.5 * tw).toFixed(2)})`)); ctx.fillStyle = "#fff1c8"; ctx.fillRect(lx - 1.5, ly - 1.5, 3, 3) }
+  const by = y + R * .78; ctx.fillStyle = "#c8202e"
+  ctx.beginPath(); ctx.moveTo(x, by); ctx.lineTo(x - R * .55, by - R * .3); ctx.lineTo(x - R * .55, by + R * .25); ctx.fill()
+  ctx.beginPath(); ctx.moveTo(x, by); ctx.lineTo(x + R * .55, by - R * .3); ctx.lineTo(x + R * .55, by + R * .25); ctx.fill()
+  ctx.fillStyle = "#a0141f"; ctx.beginPath(); ctx.moveTo(x - 3, by); ctx.lineTo(x - R * .35, by + R * .7); ctx.lineTo(x - R * .18, by + R * .62); ctx.lineTo(x, by + 2); ctx.fill()
+  ctx.beginPath(); ctx.moveTo(x + 3, by); ctx.lineTo(x + R * .35, by + R * .7); ctx.lineTo(x + R * .18, by + R * .62); ctx.lineTo(x, by + 2); ctx.fill()
+  ctx.fillStyle = "#e8323c"; ctx.fillRect(x - p, by - p, 2 * p, 2 * p)
+}
+// a potted nochebuena: a terracotta pot with a rim, dark leaves underneath, two layers of pointed red bracts in a star,
+// the little yellow flowers at the centre. s is the scale (px per world unit) where it stands
+function nochebuena(x, y, s, seed) {
+  const pw = .4 * s, ph = .32 * s
+  ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.beginPath(); ctx.ellipse(x, y, pw * .7, pw * .14, 0, 0, TAU); ctx.fill()
+  ctx.fillStyle = "#a9542f"; ctx.beginPath(); ctx.moveTo(x - pw * .42, y - ph); ctx.lineTo(x + pw * .42, y - ph); ctx.lineTo(x + pw * .32, y); ctx.lineTo(x - pw * .32, y); ctx.fill()   // the pot
+  ctx.fillStyle = "#c46a3c"; ctx.fillRect(x - pw * .5, y - ph - pw * .14, pw, pw * .16)                                // its rim
+  ctx.fillStyle = "rgba(255,255,255,.12)"; ctx.fillRect(x - pw * .3, y - ph + 2, pw * .1, ph - 6)
+  const cy = y - ph - pw * .2, leaf = (a, len, wid, c) => { ctx.save(); ctx.translate(x, cy); ctx.rotate(a); ctx.fillStyle = c
+    ctx.beginPath(); ctx.moveTo(0, 0); ctx.quadraticCurveTo(wid, -len * .45, 0, -len); ctx.quadraticCurveTo(-wid, -len * .45, 0, 0); ctx.fill(); ctx.restore() }
+  for (let i = 0; i < 7; i++) leaf(i * TAU / 7 + .2 + seed, pw * .62, pw * .16, i % 2 ? "#1d5a32" : "#24693a")      // dark leaves underneath
+  for (let i = 0; i < 7; i++) leaf(i * TAU / 7 + .65 + seed, pw * .56, pw * .15, "#b3162a")                          // the outer bracts
+  for (let i = 0; i < 6; i++) leaf(i * TAU / 6 + seed * 2, pw * .38, pw * .12, "#e0263a")                            // the inner bracts, brighter
+  ctx.fillStyle = "#f2c230"; for (const [dx, dy] of [[0, 0], [-.04, .03], [.04, .03], [0, -.04]]) { ctx.beginPath(); ctx.arc(x + dx * pw * 2, cy + dy * pw * 2, Math.max(1.5, pw * .035), 0, TAU); ctx.fill() }
+}
+// luminarias along the foot of El Mercado's arcade, down the paseo; nochebuenas in pots at the piers; the lamp post dressed
+function paseoDressing(t) {
+  for (let z = 2.6; z < 30; z *= 1.16) {
+    const [x, y] = P(-HALF + .35, 0, z), s = F / z, bw = .2 * s, bh = .28 * s, fl = .8 + .2 * Math.sin(TAU * 3 * t / fm.T + z * 3)
+    lit(() => glow(x, y - bh * .6, bw * 2.2, bh * 1.6, `rgba(255,190,100,${(.35 * fl).toFixed(3)})`))
+    ctx.fillStyle = "#c9a26a"; ctx.fillRect(x - bw / 2, y - bh, bw, bh); ctx.fillStyle = `rgba(255,214,140,${(.7 * fl).toFixed(3)})`; ctx.fillRect(x - bw * .25, y - bh * .75, bw * .5, bh * .45)
+  }
+  for (let n = 1; n < 6; n++) { const z = 1.3 + 2.5 * n + .1, [x, y] = P(-HALF + .45, 0, z); nochebuena(x, y, F / z, n) }
+}
+function lampWreath(t) {                                    // the lamp post: a wreath hung on a ribbon, in front of the post
+  const [lx, ly] = P(LAMP[0], 1.75, LAMP[1]), ls = F / LAMP[1], [, ty] = P(0, 3.1, LAMP[1])
+  ctx.fillStyle = "#b8202e"; ctx.fillRect(lx - .02 * ls, ty + .1 * ls, .04 * ls, ly - ty - .1 * ls - .26 * ls)
+  wreath(lx, ly, .27 * ls, t)
+}
+// the big tree at the far end, strung with lights
+function treeLights(t) {
+  for (let k = 0; k < 90; k++) { const a = hash(k, 13) * TAU, r = Math.sqrt(hash(13, k)), [x, y] = P(Math.cos(a) * r * 3.8, 5.2 + Math.sin(a) * r * 2.3, 26)
+    const c = ["#fff1c8", "#e8323c", GOLD, "#2fd06a", "#fff1c8"][k % 5], tw = .6 + .4 * Math.sin(TAU * 2 * t / fm.T + k)
+    lit(() => glow(x, y, 8, 8, fm.rgba(c, .5 * tw))); ctx.fillStyle = c; ctx.globalAlpha = .7 + .3 * tw; ctx.fillRect(x - 2, y - 2, 4, 4); ctx.globalAlpha = 1 }
+}
+const FLAKE = ["...#...", "#..#..#", ".#.#.#.", "..###..", "#######", "..###..", ".#.#.#.", "#..#..#", "...#..."]
+const FLAKES = Array.from({ length: 60 }, (_, i) => { const kind = i % 10 < 6 ? 0 : i % 10 < 9 ? 1 : 2
+  return { x: hash(i, 31) * W, ph: hash(i, 32), laps: kind === 2 ? 1 : 2, sw: 10 + hash(i, 33) * 30, kind, px: [4, 2, 4][kind], a: [.5, .6, .85][kind] } })
+function snow(t) {
+  for (const f of FLAKES) {
+    const h = f.kind ? 9 * f.px : f.px, k = ((t / fm.T) * f.laps + f.ph) % 1, y = Math.round((-h + k * (H + 2 * h)) / f.px) * f.px
+    const x = Math.round((f.x + Math.sin(TAU * f.laps * t / fm.T + f.ph * 6) * f.sw) / f.px) * f.px
+    ctx.fillStyle = `rgba(255,255,255,${f.a})`
+    if (!f.kind) { ctx.fillRect(x, y, f.px, f.px); continue }
+    FLAKE.forEach((row, ry) => [...row].forEach((c, rx) => { if (c === "#") ctx.fillRect(x + rx * f.px, y + ry * f.px, f.px, f.px) }))
+  }
+}
+if (XMAS) window.FOOTER_SPRITE = (x, bottom, t) => { xs.radio(ctx, x, bottom - xs.RADIO.length * 3, 3, (((t - OFF) / BEAT) / 4) % 1); return 26 * 3 }
 
 function render(t) {
   paint(t)
@@ -429,11 +700,15 @@ function render(t) {
   strollers(t)
   papelPicado(t, 9)                                        // the far strings, behind everything near
   lanterns(t)
-  loteria(t)
+  if (XMAS) treeLights(t)
+  if (XMAS) { paseoDressing(t); giftStation(t) } else loteria(t)
   papelPicado(t, 0, 9)                                     // and the near ones over it all
   lampPost()                                               // near, at the right edge, framing it
+  if (XMAS) lampWreath(t)
+  if (XMAS) santaWalk(t)
   conjunto(t)
-  celebrate(t)                                             // confetti and the zoom, over everything
+  if (!XMAS) celebrate(t)                                  // confetti and the zoom, over everything
+  if (XMAS) snow(t)
   footer(t)
 }
 fm.start(render, waits)

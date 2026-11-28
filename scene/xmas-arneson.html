@@ -1,0 +1,327 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: "Geist Mono"; font-weight: 700; src: url(fonts/GeistMono-Bold.woff2) format("woff2"); }
+  @font-face { font-family: "Geist"; font-weight: 500; src: url(fonts/Geist-Medium.woff2) format("woff2"); }
+  html, body { margin: 0; background: #07080c; overflow: hidden }
+  canvas { display: block }
+</style>
+</head>
+<body>
+<!--
+  DEVSA FM, Christmas at the Arneson River Theatre in La Villita: the open-air stage on one bank of the San Antonio
+  River, the audience on grass steps on the other, the river between. Seen from the steps, as the audience sees it.
+  In ASCII, as the place is: the round stone stage jutting into the river, which bends around it; the stone bell wall
+  behind it with three arches between piers capped with pointed pinnacles; the white stucco building at the stage's
+  left, two storeys, a low tile roof, its chimney tower, shutters, a wooden balcony, the dovecote wall of round holes
+  against the bell wall; the humped stone footbridge on the left, its arch closing into a circle in its reflection;
+  light towers on poles either side of the stage; palms and oaks behind; a downtown tower and the Tower Life
+  Building's spire on the skyline; the paved walk along the near bank, and the curved grass steps. The buildings,
+  the bridge and the stage are mirrored in the water. Our own drawing of the place, not a trace of any photograph.
+
+  In colour: the arches glowing warm with a bell and a wreath in each, the stucco lit, nochebuenas along the stage's
+  stone face, luminarias along its edge, string lights across the river from the bridge, stage lights in the tab
+  colours on the beat. On stage, a band: the PySanAntonio mascot with his blue guitar (the original image, swaying on
+  the beat) and Linux San Antonio's penguin at a keyboard whose keys light on the beat, notes rising. On the steps,
+  the cast seen from behind, a few under blankets, swaying; twice a loop a river barge (blue hull, red rails) carries
+  elves between the band and the audience, and the steps wave. Pixel snow; the DEVSA FM radio in the footer.
+  Replaced the market at La Villita on 2026-11-27.
+-->
+<canvas id="c" width="1920" height="1080"></canvas>
+<script src="plush.js"></script>
+<script src="fmkit.js"></script>
+<script src="xmas-sprites.js"></script>
+<script src="rio-boat.js"></script>
+<script>
+const { W, H, TAU, CELL, TEAL, PINK, ORANGE, ctx, g, T, lerp, hash, glow, lit, footer } = fm
+const GOLD = xs.GOLD
+const BPM = (window.BEATS && window.BEATS.bpm) || 76, OFFSET = (window.BEATS && window.BEATS.offset) || 0
+const beatPh = t => { const b = (t - OFFSET) * BPM / 60; return ((b % 1) + 1) % 1 }
+const beatN = t => Math.floor(((t - OFFSET) * BPM / 60) % 600 + 600)
+const pulse = t => Math.exp(-beatPh(t) * 3.5)
+
+// ---- the layout, in pixels ---------------------------------------------------------------------
+const BANK = 700                                          // the far bank: the stage's deck, the building's foot
+const WATER = 740                                         // the river's far edge, under the bridge
+const NEAR = 905                                          // the river's near edge, the walk's lip
+const STEPS = 950                                         // the grass steps begin
+const STAGE = { cx: 1270, x0: 860, x1: 1690, deck: BANK, front: 790, face: 46 }   // round: its front edge bulges to y front at cx
+const stageEdge = x => STAGE.deck + (STAGE.front - STAGE.deck) * Math.sqrt(Math.max(0, 1 - ((x - STAGE.cx) / ((STAGE.x1 - STAGE.x0) / 2)) ** 2))
+const WALL = { x0: 960, x1: 1600, top: 420 }
+const PIERS = [970, 1176, 1384, 1590]                     // pier centres; the arches sit between them
+const ARCHES = [0, 1, 2].map(i => { const x = (PIERS[i] + PIERS[i + 1]) / 2 - 58; return { x, w: 116, top: 470, bot: 650 } })
+const HOUSE = { x0: 560, x1: 900, top: 360, roof: 330 }
+const CHIM = { x0: 760, x1: 820, top: 270 }
+const DOVE = { x0: 900, x1: 975, top: 352 }               // the dovecote wall, between the house and the bell wall
+const BRIDGE = { x0: 30, x1: 600, feet: WATER, top: 572, rx: 236, ry: 128 }
+
+// ---- 1. the world, in greys --------------------------------------------------------------------
+function paint(t) {
+  g.setTransform(1 / CELL, 0, 0, 1 / CELL, 0, 0)
+  g.fillStyle = fm.gray(.02); g.fillRect(0, 0, W, H)
+  for (let i = 0; i < 60; i++) { g.fillStyle = fm.gray(.22 + .2 * Math.sin(TAU * 3 * t / T + i)); g.fillRect(hash(i, 1) * W, hash(i, 2) * 200, CELL, CELL) }
+  // the skyline: a downtown tower behind the house, lit window by window, and the Tower Life Building's spire far right
+  g.fillStyle = fm.gray(.16); g.fillRect(360, 70, 420, 330)
+  for (let y = 90; y < 390; y += 28) for (let x = 376; x < 770; x += 30) if (hash(x, y) > .5) { g.fillStyle = fm.gray(.5); g.fillRect(x, y, 14, 12) }
+  g.fillStyle = fm.gray(.2); g.fillRect(1720, 170, 70, 300); g.fillRect(1732, 130, 46, 40); g.fillRect(1744, 100, 22, 30)
+  g.beginPath(); g.moveTo(1744, 100); g.lineTo(1755, 50); g.lineTo(1766, 100); g.fill()
+  for (let y = 190; y < 460; y += 26) for (let x = 1730; x < 1784; x += 18) if (hash(x, y) > .55) { g.fillStyle = fm.gray(.45); g.fillRect(x, y, 8, 12) }
+  // the trees: oaks over the left bank, palms behind the bell wall
+  for (let i = 0; i < 30; i++) {
+    const x = hash(i, 11) * W, y = 160 + hash(i, 12) * 300, r = 60 + hash(i, 13) * 90
+    g.fillStyle = fm.gray(.06 + .05 * hash(i, 14)); g.beginPath(); g.ellipse(x, y, r, r * .6, 0, 0, TAU); g.fill()
+  }
+  for (const [px, py, h] of [[1060, 170, 260], [1500, 120, 310], [1660, 220, 220], [180, 150, 420]]) {
+    g.fillStyle = fm.gray(.24); g.fillRect(px - 6, py, 12, h)
+    for (let k = 0; k < 9; k++) { const a = Math.PI + k * Math.PI / 8; g.strokeStyle = fm.gray(.2); g.lineWidth = 14; g.beginPath(); g.moveTo(px, py); g.quadraticCurveTo(px + Math.cos(a) * 70, py + Math.sin(a) * 60 - 20, px + Math.cos(a) * 130, py + Math.sin(a) * 40 + 30); g.stroke() }
+  }
+  // the bell wall: rough stone, three arches between piers, a pointed pinnacle on each pier
+  g.fillStyle = fm.gray(.52); g.fillRect(WALL.x0, WALL.top, WALL.x1 - WALL.x0, BANK - WALL.top)
+  for (let y = WALL.top + 8; y < BANK; y += 24) for (let x = WALL.x0 + ((y / 24) % 2) * 20; x < WALL.x1; x += 40) { g.fillStyle = fm.gray(.42 + .1 * hash(x, y)); g.fillRect(x, y, 34, 18) }
+  for (const [i, a] of ARCHES.entries()) {                // each arch's stepped hood over the wall's top
+    g.fillStyle = fm.gray(.62); g.beginPath(); g.moveTo(a.x - 22, WALL.top); g.lineTo(a.x - 22, a.top - 4); g.arc(a.x + a.w / 2, a.top + a.w / 2 - 6, a.w / 2 + 22, Math.PI, 0); g.lineTo(a.x + a.w + 22, WALL.top); g.fill()
+    g.fillStyle = fm.gray(.05); g.beginPath(); g.moveTo(a.x, a.bot); g.lineTo(a.x, a.top + a.w / 2); g.arc(a.x + a.w / 2, a.top + a.w / 2, a.w / 2, Math.PI, 0); g.lineTo(a.x + a.w, a.bot); g.fill()
+  }
+  for (const px of PIERS) { g.fillStyle = fm.gray(.8); g.fillRect(px - 16, WALL.top - 40, 32, 44); g.beginPath(); g.moveTo(px - 16, WALL.top - 40); g.lineTo(px, WALL.top - 92); g.lineTo(px + 16, WALL.top - 40); g.fill() }
+  // the house: two storeys of white stucco, a low tile roof, the chimney tower, shutters, a balcony, an arched door
+  g.fillStyle = fm.gray(.7); g.fillRect(HOUSE.x0, HOUSE.top, HOUSE.x1 - HOUSE.x0, BANK - HOUSE.top)
+  g.fillStyle = fm.gray(.72); g.fillRect(CHIM.x0, CHIM.top, CHIM.x1 - CHIM.x0, HOUSE.top - CHIM.top); g.fillStyle = fm.gray(.55); g.fillRect(CHIM.x0 - 6, CHIM.top - 10, CHIM.x1 - CHIM.x0 + 12, 12)
+  g.fillStyle = fm.gray(.4); g.beginPath(); g.moveTo(HOUSE.x0 - 14, HOUSE.top + 4); g.lineTo(HOUSE.x0 + 70, HOUSE.roof); g.lineTo(HOUSE.x1 - 70, HOUSE.roof); g.lineTo(HOUSE.x1 + 14, HOUSE.top + 4); g.fill()
+  for (const [wx, wy] of [[620, 410], [800, 410], [620, 560]]) { g.fillStyle = fm.gray(.1); g.fillRect(wx, wy, 44, 62); g.fillStyle = fm.gray(.25); g.fillRect(wx - 16, wy, 12, 62); g.fillRect(wx + 48, wy, 12, 62) }   // windows and their shutters
+  g.fillStyle = fm.gray(.28); g.fillRect(700, 486, 170, 8); for (let x = 704; x < 870; x += 10) g.fillRect(x, 486, 4, 40); g.fillRect(700, 524, 170, 6)   // the balcony
+  g.fillStyle = fm.gray(.12); g.beginPath(); g.moveTo(812, BANK); g.lineTo(812, 610); g.arc(838, 610, 26, Math.PI, 0); g.lineTo(864, BANK); g.fill()   // the arched door
+  g.fillStyle = fm.gray(.74); g.fillRect(DOVE.x0, DOVE.top, DOVE.x1 - DOVE.x0, BANK - DOVE.top)
+  g.fillStyle = fm.gray(.4); g.beginPath(); g.moveTo(DOVE.x0 - 10, DOVE.top + 2); g.lineTo(DOVE.x0 + 10, DOVE.top - 22); g.lineTo(DOVE.x1 - 10, DOVE.top - 22); g.lineTo(DOVE.x1 + 10, DOVE.top + 2); g.fill()   // its own tile roof
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) { g.fillStyle = fm.gray(.12); g.beginPath(); g.arc(DOVE.x0 + 16 + c * 21, DOVE.top + 30 + r * 22, 6, 0, TAU); g.fill() }
+  // the light towers either side of the stage
+  // the far bank under the house and the bridge's landing
+  g.fillStyle = fm.gray(.28); g.fillRect(0, BANK, STAGE.x0, WATER - BANK)
+  // the river
+  g.fillStyle = fm.gray(.05); g.fillRect(0, WATER, W, NEAR - WATER)
+  // the footbridge: a steep hump of stone, its round arch over the water
+  const B = BRIDGE, mid = (B.x0 + B.x1) / 2, dy = x => B.top + 52 * ((x - mid) / ((B.x1 - B.x0) / 2)) ** 2
+  g.fillStyle = fm.gray(.62); g.beginPath(); g.moveTo(B.x0 - 30, B.feet + 10)
+  for (let x = B.x0 - 30; x <= B.x1 + 30; x += 8) g.lineTo(x, dy(Math.max(B.x0, Math.min(B.x1, x))))
+  g.lineTo(B.x1 + 30, B.feet + 10); g.lineTo(mid + B.rx, B.feet + 10); g.ellipse(mid, B.feet + 10, B.rx, B.ry, 0, 0, Math.PI, true); g.closePath(); g.fill()
+  for (let y = B.top; y < B.feet; y += 20) for (let x = B.x0 - 20 + ((y / 20) % 2) * 16; x < B.x1 + 30; x += 32) { g.fillStyle = fm.gray(.47 + .1 * hash(x, y)); g.fillRect(x, y, 26, 3) }
+  g.fillStyle = fm.gray(.05); g.beginPath(); g.ellipse(mid, B.feet + 10, B.rx, B.ry, 0, Math.PI, 0); g.fill()
+  g.strokeStyle = fm.gray(.82); g.lineWidth = 12; g.beginPath(); g.ellipse(mid, B.feet + 10, B.rx + 6, B.ry + 6, 0, Math.PI, 0); g.stroke()
+  g.strokeStyle = fm.gray(.9); g.lineWidth = 12; g.beginPath(); for (let x = B.x0 - 30; x <= B.x1 + 30; x += 8) { const y = dy(Math.max(B.x0, Math.min(B.x1, x))) - 10; x === B.x0 - 30 ? g.moveTo(x, y) : g.lineTo(x, y) } g.stroke()
+  // the reflections: everything above the far edge, mirrored into the river, dimmer and broken by ripples
+  g.setTransform(1, 0, 0, 1, 0, 0)
+  const wTop = Math.round(WATER / CELL), wBot = Math.round(NEAR / CELL), rows = wBot - wTop
+  g.save(); g.globalAlpha = .62
+  for (let r = 0; r < rows; r++) { const src = wTop - 1 - r, shift = Math.round(Math.sin(r * 1.7 + TAU * 4 * t / T) * 1.2)
+    if (src >= 0) g.drawImage(g.canvas, 0, src, fm.COLS, 1, shift, wTop + r, fm.COLS, 1) }
+  g.restore()
+  g.setTransform(1 / CELL, 0, 0, 1 / CELL, 0, 0)
+  // the stage: its round deck jutting into the river, and the stone face down to the water, mirrored below
+  g.fillStyle = fm.gray(.36); g.beginPath(); g.moveTo(STAGE.x0, STAGE.deck); for (let x = STAGE.x0; x <= STAGE.x1; x += 8) g.lineTo(x, stageEdge(x)); g.lineTo(STAGE.x1, STAGE.deck); g.fill()
+  for (let x = STAGE.x0 + 20; x < STAGE.x1; x += 34) { g.fillStyle = fm.gray(.28); g.fillRect(x, STAGE.deck, 2, stageEdge(x) - STAGE.deck) }
+  g.fillStyle = fm.gray(.48); g.beginPath(); g.moveTo(STAGE.x0, stageEdge(STAGE.x0)); for (let x = STAGE.x0; x <= STAGE.x1; x += 8) g.lineTo(x, stageEdge(x)); for (let x = STAGE.x1; x >= STAGE.x0; x -= 8) g.lineTo(x, stageEdge(x) + STAGE.face); g.fill()
+  for (let x = STAGE.x0; x < STAGE.x1; x += 30) for (let k = 0; k < 3; k++) { g.fillStyle = fm.gray(.36 + .1 * hash(x, k)); g.fillRect(x + (k % 2) * 14, stageEdge(x) + 8 + k * 13, 24, 3) }
+  g.fillStyle = fm.gray(.2); g.beginPath(); for (let x = STAGE.x0; x <= STAGE.x1; x += 8) { const y = stageEdge(x) + STAGE.face; x === STAGE.x0 ? g.moveTo(x, y) : g.lineTo(x, y) } for (let x = STAGE.x1; x >= STAGE.x0; x -= 8) g.lineTo(x, Math.min(NEAR, stageEdge(x) + STAGE.face * 2)); g.fill()
+  for (let i = 0; i < 60; i++) { const x = ((hash(i, 41) * W + (t / T) * 2 * 160) % W), y = WATER + 6 + hash(i, 42) * (NEAR - WATER - 12); g.fillStyle = fm.gray(.18); g.fillRect(x, y, 26 + hash(i, 43) * 40, 2) }   // ripples
+  // the near bank: the paved walk with its lip, then the curved grass steps
+  g.fillStyle = fm.gray(.5); g.fillRect(0, NEAR, W, 8); g.fillStyle = fm.gray(.3); g.fillRect(0, NEAR + 8, W, STEPS - NEAR - 8)
+  for (let x = 0; x < W; x += 90) { g.fillStyle = fm.gray(.22); g.fillRect(x, NEAR + 8, 2, STEPS - NEAR - 8) }
+  for (let k = 0; k < 3; k++) {
+    const y = STEPS + k * 44
+    g.fillStyle = fm.gray(.14 + k * .03); g.fillRect(0, y, W, 44)
+    g.fillStyle = fm.gray(.5); g.beginPath(); g.moveTo(0, y - 6); g.quadraticCurveTo(W / 2, y + 14, W, y - 6); g.lineTo(W, y + 2); g.quadraticCurveTo(W / 2, y + 22, 0, y + 2); g.fill()
+  }
+  g.setTransform(1, 0, 0, 1, 0, 0)
+}
+// colour over the characters: stucco cream, stone warm, tile red, water blue, grass green
+function tint(cx, cy, v) {
+  const X = cx * CELL, Y = cy * CELL
+  if (Y >= STEPS) return v > .4 ? [200, 190, 170] : [70, 115, 75]
+  if (Y >= NEAR) return [190, 180, 165]
+  if (Y >= WATER && !(X >= STAGE.x0 && X <= STAGE.x1 && Y < stageEdge(X) + STAGE.face)) return [80, 120, 160, .15]
+  if (X >= HOUSE.x0 - 14 && X < HOUSE.x1 + 14 && Y >= HOUSE.roof - 4 && Y < HOUSE.top + 6) return [190, 80, 60]
+  if (X >= DOVE.x0 - 10 && X < DOVE.x1 + 10 && Y >= DOVE.top - 24 && Y < DOVE.top + 4) return [190, 80, 60]
+  if (X >= HOUSE.x0 && X < DOVE.x1 && Y >= CHIM.top - 10 && Y < BANK && v > .55) return [245, 238, 222]
+  if (X >= WALL.x0 - 30 && X < WALL.x1 + 30 && Y >= WALL.top - 92 && Y < BANK) return [214, 186, 146]
+  if (X >= STAGE.x0 && X < STAGE.x1 && Y >= STAGE.deck && Y < WATER + 120) return [200, 176, 140]
+  if (X < 620 && Y >= 420 && Y < WATER + 20 && v > .3) return [206, 190, 160]
+  return null
+}
+
+// ---- 2. in colour ------------------------------------------------------------------------------
+const XL = [TEAL, PINK, ORANGE, GOLD, "#e8323c", "#2fd06a"]
+function arches(t) {                                     // warm light in each arch, a bell swinging on the beat, a wreath over it
+  ARCHES.forEach((a, i) => {
+    const fl = .85 + .15 * Math.sin(TAU * 3 * t / T + i)
+    ctx.save(); ctx.beginPath(); ctx.moveTo(a.x, a.bot); ctx.lineTo(a.x, a.top + a.w / 2); ctx.arc(a.x + a.w / 2, a.top + a.w / 2, a.w / 2, Math.PI, 0); ctx.lineTo(a.x + a.w, a.bot); ctx.clip()
+    const gr = ctx.createLinearGradient(0, a.top, 0, a.bot); gr.addColorStop(0, `rgba(255,190,90,${(.75 * fl).toFixed(3)})`); gr.addColorStop(1, `rgba(220,110,40,${(.55 * fl).toFixed(3)})`)
+    ctx.fillStyle = gr; ctx.fillRect(a.x, a.top, a.w, a.bot - a.top); ctx.restore()
+    lit(() => { glow(a.x + a.w / 2, (a.top + a.bot) / 2, 120, 150, `rgba(255,170,80,${(.22 * fl).toFixed(3)})`); glow(a.x + a.w / 2, WATER + 60, 40, 70, `rgba(255,170,80,${(.14 * fl).toFixed(3)})`) })
+    const bx = a.x + a.w / 2
+    for (const [k, by, sz] of [[0, a.top + 30, 1], [1, a.top + 100, .85]]) {   // two bells, one over the other, swinging on the beat
+      const sw = Math.sin(TAU * BPM / 60 * (t - OFFSET) / 2 + i + k * 1.3) * .22
+      ctx.save(); ctx.translate(bx, by); ctx.rotate(sw); ctx.scale(sz, sz); ctx.fillStyle = "#5a3a1a"; ctx.fillRect(-2, -12, 4, 12)
+      ctx.fillStyle = "#3a2410"; ctx.beginPath(); ctx.moveTo(-12, 0); ctx.lineTo(12, 0); ctx.lineTo(20, 34); ctx.lineTo(-20, 34); ctx.closePath(); ctx.fill()
+      ctx.fillStyle = "#6a4a20"; ctx.fillRect(-20, 30, 40, 4); ctx.restore() }
+    ctx.strokeStyle = "#2f9e4f"; ctx.lineWidth = 9; ctx.beginPath(); ctx.arc(bx, a.top - 26, 18, 0, TAU); ctx.stroke(); ctx.fillStyle = "#e8323c"; ctx.fillRect(bx - 7, a.top - 14, 14, 10)
+  })
+}
+function stucco(t) {                                     // the house's lit windows, the lamp by its door, greenery on the balcony
+  for (const [wx, wy] of [[620, 410], [800, 410], [620, 560]]) {
+    lit(() => glow(wx + 22, wy + 31, 60, 60, "rgba(255,180,90,.22)")); ctx.fillStyle = "rgba(255,196,120,.5)"; ctx.fillRect(wx, wy, 44, 62)
+    ctx.fillStyle = "rgba(60,30,10,.5)"; ctx.fillRect(wx + 20, wy, 4, 62); ctx.fillRect(wx, wy + 29, 44, 4)
+  }
+  ctx.strokeStyle = "#2f7a44"; ctx.lineWidth = 6; ctx.beginPath(); for (let x = 700; x <= 870; x += 10) { const y = 490 + Math.sin((x - 700) / 170 * Math.PI) * 14; x === 700 ? ctx.moveTo(x, y) : ctx.lineTo(x, y) } ctx.stroke()   // garland on the balcony
+  for (let x = 712; x < 870; x += 24) { ctx.fillStyle = XL[(x / 24 | 0) % XL.length]; ctx.beginPath(); ctx.arc(x, 494 + Math.sin((x - 700) / 170 * Math.PI) * 14, 3.5, 0, TAU); ctx.fill() }
+  lit(() => glow(540, 600, 36, 36, "rgba(255,230,170,.5)")); ctx.fillStyle = "#2a2b32"; ctx.fillRect(537, 610, 6, 90); ctx.fillStyle = "#fff1c8"; ctx.fillRect(532, 590, 16, 20)
+}
+function rigging(t) {                                    // the light trees either side (a pole, two bars of cans), the speakers, the deck's rail
+  for (const lx of [880, 1720]) {
+    ctx.fillStyle = "#2a2b32"; ctx.fillRect(lx - 5, 296, 10, STAGE.front - 296)
+    for (const by of [300, 344]) { ctx.fillRect(lx - 40, by, 80, 6); for (let k = 0; k < 4; k++) { ctx.fillStyle = "#18181d"; ctx.fillRect(lx - 38 + k * 20, by + 6, 16, 18); ctx.fillStyle = "#2a2b32" } }
+  }
+  for (const sx of [930, 1620]) { ctx.fillStyle = "#121216"; ctx.fillRect(sx - 26, FLOOR - 78, 52, 78); ctx.fillStyle = "#2a2a30"; ctx.beginPath(); ctx.arc(sx, FLOOR - 50, 14, 0, TAU); ctx.fill(); ctx.beginPath(); ctx.arc(sx, FLOOR - 20, 8, 0, TAU); ctx.fill() }
+  ctx.strokeStyle = "#2a2b32"; ctx.lineWidth = 3; ctx.beginPath(); for (let x = STAGE.x0 + 4; x <= STAGE.x1 - 4; x += 8) { const y = stageEdge(x) - 16; x === STAGE.x0 + 4 ? ctx.moveTo(x, y) : ctx.lineTo(x, y) } ctx.stroke()
+  ctx.strokeStyle = "#16161a"; ctx.lineWidth = 3; for (let x = 590; x <= 700; x += 14) { ctx.beginPath(); ctx.moveTo(x, BANK - 40); ctx.lineTo(x, BANK); ctx.stroke() } ctx.fillStyle = "#16161a"; ctx.fillRect(588, BANK - 42, 114, 4)   // the iron rail where the bridge lands
+}
+function stageLights(t) {                                // cones from the light towers, in the tab colours, brightening on the beat
+  const p = pulse(t)
+  lit(() => [[880, 1120, TEAL], [880, 1300, PINK], [1720, 1260, ORANGE], [1720, 1460, TEAL]].forEach(([lx, tx, c], i) => {
+    const sway = Math.sin(TAU * 2 * t / T + i * 2) * 30, ty = STAGE.deck + 30
+    const gr = ctx.createLinearGradient(lx, 310, tx, ty); gr.addColorStop(0, fm.rgba(c, .2 + .1 * p)); gr.addColorStop(1, fm.rgba(c, .04))
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.moveTo(lx - 8, 310); ctx.lineTo(lx + 8, 310); ctx.lineTo(tx + 90 + sway, ty); ctx.lineTo(tx - 90 + sway, ty); ctx.fill()
+    glow(tx + sway, ty, 130, 22, fm.rgba(c, .22 + .18 * p)); glow(lx, 314, 16, 16, fm.rgba(c, .9))
+  }))
+}
+function nochebuenas(t) {                                // poinsettias along the stage's stone face, and luminarias along the deck's edge
+  for (let i = 0; i < 30; i++) {
+    const x = lerp(STAGE.x0 + 10, STAGE.x1 - 10, (i + .5) / 30), y = stageEdge(x) + STAGE.face - 6
+    ctx.fillStyle = "#1f6a34"; ctx.fillRect(x - 10, y + 2, 20, 6)
+    ctx.fillStyle = i % 5 === 2 ? "#f4efe6" : "#d6223a"; for (const [dx, dy] of [[-8, 0], [8, 0], [0, -7], [0, 5], [-5, -5], [5, -5]]) ctx.fillRect(x + dx - 3, y + dy - 3, 7, 7)
+    ctx.fillStyle = GOLD; ctx.fillRect(x - 2, y - 2, 4, 4)
+  }
+  for (let i = 0; i < 11; i++) {
+    const x = lerp(STAGE.x0 + 30, STAGE.x1 - 30, i / 10), y = stageEdge(x) - 2, fl = .8 + .2 * Math.sin(TAU * (3 + i % 3) * t / T + i)
+    lit(() => glow(x, y - 10, 28, 20, `rgba(255,190,100,${(.4 * fl).toFixed(3)})`))
+    ctx.fillStyle = "#c9a26a"; ctx.fillRect(x - 9, y - 20, 18, 20); ctx.fillStyle = `rgba(255,214,140,${(.65 * fl).toFixed(3)})`; ctx.fillRect(x - 4, y - 15, 8, 9)
+  }
+}
+function riverLights(t) {                                // two swags across the river from the bridge, and their colours on the water
+  const p = pulse(t)
+  ;[[480, 560, 1920, 420, 120], [520, 600, 1920, 470, 100]].forEach(([x0, y0, x1, y1, sag], si) => {
+    const at = u => [lerp(x0, x1, u), lerp(y0, y1, u) + Math.sin(u * Math.PI) * sag]
+    ctx.strokeStyle = "rgba(255,255,255,.18)"; ctx.lineWidth = 1.5; ctx.beginPath()
+    for (let i = 0; i <= 40; i++) { const [x, y] = at(i / 40); i ? ctx.lineTo(x, y) : ctx.moveTo(x, y) } ctx.stroke()
+    for (let i = 1; i < 30; i++) {
+      const [x, y] = at(i / 30), c = XL[(i + si + beatN(t)) % XL.length], tw = .6 + .4 * p
+      lit(() => glow(x, y + 5, 14, 14, fm.rgba(c, .4 * tw)))
+      ctx.fillStyle = c; ctx.beginPath(); ctx.arc(x, y + 5, 4, 0, TAU); ctx.fill()
+    }
+  })
+}
+
+const FLOOR = 748                                         // where the band stands on the deck
+// ---- the band ----------------------------------------------------------------------------------
+const [PYSA, pysaReady] = fm.loadImg("pysa-mascot-full.webp"), [PENGUIN, penguinReady] = fm.loadImg("penguin.png")
+function band(t) {
+  const p = pulse(t), sway = Math.sin(TAU * BPM / 60 * (t - OFFSET) / 2)
+  if (PYSA.complete && PYSA.naturalWidth) {               // the mascot, the original image, swaying with his guitar
+    const h = 270, w = h * PYSA.naturalWidth / PYSA.naturalHeight, x = 1150, base = FLOOR + 6
+    ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.beginPath(); ctx.ellipse(x, base, 60, 8, 0, 0, TAU); ctx.fill()
+    ctx.save(); ctx.translate(x, base); ctx.rotate(sway * .035); ctx.drawImage(PYSA, -w / 2, -h - p * 3, w, h); ctx.restore()
+  }
+  // the mic stand in front of him
+  ctx.fillStyle = "#2a2b32"; ctx.fillRect(1230, FLOOR - 150, 4, 150); ctx.fillRect(1214, FLOOR - 4, 36, 4); ctx.fillStyle = "#555"; ctx.fillRect(1226, FLOOR - 160, 12, 14)
+  // the penguin at a keyboard, keys lighting on the beat
+  const kx = 1400, ky = FLOOR - 92
+  if (PENGUIN.complete && PENGUIN.naturalWidth) { const h = 150, w = h * PENGUIN.naturalWidth / PENGUIN.naturalHeight
+    ctx.imageSmoothingEnabled = false; ctx.drawImage(PENGUIN, kx + 40 - w / 2, FLOOR - h - 50 - Math.round(p * 4), w, h); ctx.imageSmoothingEnabled = true }
+  ctx.fillStyle = "#2a2b32"; ctx.fillRect(kx - 30, ky + 22, 6, 70); ctx.fillRect(kx + 104, ky + 22, 6, 70)   // the stand
+  ctx.fillStyle = "#1a1a20"; ctx.fillRect(kx - 40, ky, 160, 26)
+  const lead = beatN(t) % 8
+  for (let k = 0; k < 14; k++) { const on = k === lead || k === (lead * 3 + 5) % 14; ctx.fillStyle = on ? GOLD : "#eeeeee"; ctx.fillRect(kx - 34 + k * 11, ky + 6, 9, 16) }
+  if (lead % 2 === 0) lit(() => glow(kx + 40, ky + 10, 80, 30, `rgba(255,211,67,${(.25 * p).toFixed(3)})`))
+  // notes rising from the band, a whole number a loop
+  for (let i = 0; i < 8; i++) {
+    const k = ((t / T) * 12 + i / 8) % 1, x = lerp(1110, 1500, hash(i, 71)) + Math.sin(k * 6 + i) * 20, y = FLOOR - 200 - k * 260
+    xs.spr(ctx, xs.NOTE, { L: [TEAL, PINK, ORANGE, GOLD][i % 4] }, x, y, 4); ctx.globalAlpha = 1
+  }
+}
+
+// ---- the river boats, twice a loop, between the band and the audience ---------------------------
+// the River Walk's boat (rio-boat.js, after GO RIO's), at three-quarter size, elves and an agent riding in it
+const [ALT, altReady] = fm.loadImg("devsa-alt-logo.svg")
+const ROCK = t => Math.sin(TAU * 4 * t / fm.LT) * 2.5
+const RIO = makeRioBoat({ ALT, ROCK, LT: fm.LT })
+const BARGE = { n: 2, dur: 26, s: .74, bottom: NEAR - 2 }
+const SKINS = [["#f2cfae", "#d9ab86"], ["#c2875a", "#a06c44"], ["#6e4428", "#55331e"], ["#e0a87e", "#c48a60"], ["#9a6440", "#7c4e30"]]
+function bargeAt(t) { for (let k = 0; k < BARGE.n; k++) { const t0 = T * (.18 + k * .5), u = (t - t0) / BARGE.dur; if (u >= 0 && u <= 1) return { u, k } } return null }
+function barge(t) {
+  const b = bargeAt(t); if (!b) return
+  const s = BARGE.s, wpx = 640 * s, x = lerp(-wpx - 60, W + 60, b.u)
+  ctx.save(); ctx.translate(x - 470 * s, BARGE.bottom - 932 * s); ctx.scale(s, s)
+  for (let i = 0; i < 5; i++) {                          // the riders, peeking over the panels, waving
+    const ex = 540 + i * 130, px = 6
+    if (b.k === 1 && i === 2) { drawPlush(ctx, { x: ex, y: 842 + ROCK(t), s: .9, tint: [TEAL, PINK][i % 2], number: "", t, seed: 7 + i, armsUp: Math.sin(t * 5) > 0 ? 1 : 0 }); continue }
+    const [w, h] = xs.size(xs.ELF, px), wave = Math.sin(t * 6 + i) > 0, ey = 800 + ROCK(t) - h * .8
+    xs.spr(ctx, xs.ELF, { ...xs.PAL, E: XL[(i + b.k) % 4], S: SKINS[i % 5][0], s: SKINS[i % 5][1] }, ex - w / 2, ey, px)
+    if (wave) { ctx.fillStyle = SKINS[i % 5][0]; ctx.fillRect(ex - w / 2 - px, ey + 3 * px, 2 * px, 3 * px) }
+  }
+  RIO.barge(ctx, t); RIO.bulbs(ctx, t)
+  ctx.restore()
+  lit(() => glow(x + wpx / 2, BARGE.bottom - 10, wpx * .6, 24, "rgba(255,200,120,.12)"))   // its lights on the water
+}
+
+// ---- the audience on the steps, seen from behind ------------------------------------------------
+const HAIR = ["#3a2418", "#1a1412", "#7a3b1e"]
+const ELF_BACK = xs.ELF.slice(0, 15).map((row, r) => r === 6 ? "..S.hhhhhh.S.." : r === 7 ? "..ShhhhhhhhS.." : r === 8 ? "....hhhhhh...." : r === 11 ? "..EEEEEEEEEE.." : row)
+// [x, row, kind, colour, skin, hair, blanket]
+const SEATS = [[330, 0, "e", TEAL, 0, 0], [470, 0, "a", PINK], [620, 0, "e", ORANGE, 2, 1, "#2f6d3b"], [1080, 0, "a", TEAL], [1230, 0, "e", PINK, 3, 2], [1380, 0, "e", TEAL, 1, 0, "#7a2a3a"],
+               [400, 1, "a", ORANGE], [560, 1, "e", PINK, 4, 1], [1150, 1, "e", ORANGE, 0, 2, "#2f4f7a"], [1310, 1, "a", PINK]]
+function audience(t) {
+  const passing = !!bargeAt(t) && bargeAt(t).u > .15 && bargeAt(t).u < .85, sw = Math.sin(TAU * BPM / 60 * (t - OFFSET) / 2)
+  SEATS.slice().sort((a, b) => a[1] - b[1]).forEach(([x, row, kind, c, sk, hr, blanket], i) => {
+    const base = STEPS + 44 + row * 56, px = row ? 6 : 5, dx = Math.round(sw * 3 * (i % 2 ? 1 : -1))
+    if (kind === "e") {
+      const [w, h] = xs.size(ELF_BACK, px); xs.spr(ctx, ELF_BACK, { ...xs.PAL, E: c, S: SKINS[sk][0], s: SKINS[sk][1], h: HAIR[hr] }, x - w / 2 + dx, base - h, px)
+      if (blanket) { ctx.fillStyle = blanket; ctx.fillRect(x - 7 * px + dx, base - 6 * px, 14 * px, 6 * px); ctx.fillStyle = "rgba(244,239,230,.8)"; for (let q = 0; q < 3; q++) ctx.fillRect(x - 7 * px + dx, base - 5 * px + q * 2 * px, 14 * px, Math.max(1, px * .4)) }
+      if (passing && !blanket && Math.sin(t * 6 + i) > 0) { ctx.fillStyle = SKINS[sk][0]; ctx.fillRect(x - w / 2 + dx - px, base - h + 3 * px, 2 * px, 3 * px) }
+    } else drawPlush(ctx, { x: x + dx, y: base, s: px * .14, tint: c, number: "", t, back: true, seed: i * 5 + 1, armsUp: passing && Math.sin(t * 5 + i) > 0 ? 1 : 0 })
+  })
+}
+
+// pixel snow: the desk's six-armed flake and specks, seamless
+const FLAKE = ["...#...", "#..#..#", ".#.#.#.", "..###..", "#######", "..###..", ".#.#.#.", "#..#..#", "...#..."]
+const FLAKES = Array.from({ length: 60 }, (_, i) => { const kind = i % 10 < 6 ? 0 : i % 10 < 9 ? 1 : 2
+  return { x: hash(i, 31) * W, ph: hash(i, 32), laps: kind === 2 ? 1 : 2, sw: 10 + hash(i, 33) * 30, kind, px: [4, 2, 4][kind], a: [.5, .6, .85][kind] } })
+function snow(t) {
+  for (const f of FLAKES) {
+    const h = f.kind ? 9 * f.px : f.px, k = ((t / T) * f.laps + f.ph) % 1, y = Math.round((-h + k * (H + 2 * h)) / f.px) * f.px
+    const x = Math.round((f.x + Math.sin(TAU * f.laps * t / T + f.ph * 6) * f.sw) / f.px) * f.px
+    ctx.fillStyle = `rgba(255,255,255,${f.a})`
+    if (!f.kind) { ctx.fillRect(x, y, f.px, f.px); continue }
+    FLAKE.forEach((row, ry) => [...row].forEach((c, rx) => { if (c === "#") ctx.fillRect(x + rx * f.px, y + ry * f.px, f.px, f.px) }))
+  }
+}
+window.FOOTER_SPRITE = (x, bottom, t) => { xs.radio(ctx, x, bottom - xs.RADIO.length * 3, 3, beatPh(t) / 4 + Math.floor((t - OFFSET) * BPM / 60 % 4 + 4) % 4 / 4); return 26 * 3 }
+
+function render(t) {
+  paint(t)
+  fm.ascii("#07080c", tint)
+  stucco(t)
+  arches(t)
+  rigging(t)
+  stageLights(t)
+  band(t)
+  nochebuenas(t)
+  riverLights(t)
+  barge(t)
+  audience(t)
+  snow(t)
+  footer(t)
+}
+fm.start(render, [pysaReady, penguinReady, altReady])
+</script>
+</body>
+</html>

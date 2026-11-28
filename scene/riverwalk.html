@@ -23,6 +23,7 @@
 <canvas id="c" width="1920" height="1080"></canvas>
 <script src="plush.js"></script>
 <script src="xmas-sprites.js"></script>
+<script src="rio-boat.js"></script>
 <script>
 // synced (render.cjs SYNC=...): the loop is the song, with the song inside it, and BEATS carries
 // its beat grid, so the riders nod and the lights on the water pulse on the real beat. The
@@ -263,78 +264,13 @@ function buddyPixel(t) {
 // character rides inside, peeking over the panels.
 const ROCK = t => Math.sin(TAU * 4 * t / LT) * 2.5              // 4 slow rocks a loop
 window.CHAR = { x: 770, y: 830, px: 11, sway: ROCK, noFeet: true }
-const BOAT = { panel: "#2c8fa3", panelDark: "#1d6474", cut: "#0b1f24", rim: "#c58a4a", hull: "#1a1d20", hullLine: "#3a3f45" }
-// the alt logo turned into a cut: its black window and tabs become openings (cut colour),
-// its light chevron, SA and cursor stay as metal (panel colour). Built once.
-let CUT = null
-function cutMark() {
-  if (CUT || !ALT.complete) return CUT
-  const c = document.createElement("canvas"); c.width = 368; c.height = 276
-  const x = c.getContext("2d", { willReadFrequently: true }); x.drawImage(ALT, 0, 0, c.width, c.height)
-  const d = x.getImageData(0, 0, c.width, c.height), p = d.data
-  const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16))
-  const [cr, cg, cb] = hex(BOAT.cut), [pr, pg, pb] = hex(BOAT.panel)
-  for (let i = 0; i < p.length; i += 4) {
-    if (p[i + 3] < 20) continue
-    const light = p[i] > 128
-    p[i] = light ? pr : cr; p[i + 1] = light ? pg : cg; p[i + 2] = light ? pb : cb
-  }
-  // the tabs are light in the alt logo; on a cut they read as openings too
-  for (let y = 0; y < c.height * 0.17; y++) for (let q = 0; q < c.width; q++) { const i = (y * c.width + q) * 4
-    if (p[i + 3] >= 20) { p[i] = cr; p[i + 1] = cg; p[i + 2] = cb } }
-  x.putImageData(d, 0, 0); CUT = c; return CUT
-}
-function barge(t) {
-  const x0 = 470, x1 = 1110, top = 800 + ROCK(t), panelH = 92, r = 46
-  const y1 = top + panelH, hullH = 40
-  // hull: dark, rounded ends, with the black rubber bumper line
-  ctx.fillStyle = BOAT.hull
-  ctx.beginPath(); ctx.moveTo(x0 + r, y1); ctx.lineTo(x1 - r, y1); ctx.quadraticCurveTo(x1 + 6, y1, x1 + 6, y1 + hullH * .5)
-  ctx.quadraticCurveTo(x1, y1 + hullH, x1 - r, y1 + hullH); ctx.lineTo(x0 + r, y1 + hullH)
-  ctx.quadraticCurveTo(x0, y1 + hullH, x0 - 6, y1 + hullH * .5); ctx.quadraticCurveTo(x0 - 6, y1, x0 + r, y1); ctx.fill()
-  ctx.fillStyle = BOAT.hullLine; ctx.fillRect(x0 + 10, y1 + 10, x1 - x0 - 20, 6)
-  // the panels: rounded at both ends, a wood rim on top
-  ctx.save()
-  ctx.beginPath(); ctx.moveTo(x0 + r, top); ctx.lineTo(x1 - r, top); ctx.quadraticCurveTo(x1, top, x1, top + r)
-  ctx.lineTo(x1, y1); ctx.lineTo(x0, y1); ctx.lineTo(x0, top + r); ctx.quadraticCurveTo(x0, top, x0 + r, top); ctx.closePath()
-  ctx.fillStyle = BOAT.panel; ctx.fill(); ctx.clip()
-  // panel seams and cut-out sunbursts, like the boats' papel picado panels
-  const n = 7, pw = (x1 - x0) / n
-  for (let i = 0; i < n; i++) {
-    const cx = x0 + pw * (i + .5), cy = top + panelH * .55
-    if (i % 2 === 1) {                   // every other panel: the DEVSA mark cut through the metal
-      ctx.fillStyle = BOAT.panelDark; ctx.fillRect(x0 + pw * i - 2, top, 4, panelH)
-      const cut = cutMark(); if (cut) { const lh = panelH * .7, lw = lh * cut.width / cut.height
-        ctx.drawImage(cut, cx - lw / 2, top + (panelH - lh) / 2 + 3, lw, lh) }
-      // the small punched holes papel picado has round its edge
-      ctx.fillStyle = BOAT.cut
-      for (const dx of [-1, 1]) for (const yy of [top + 12, y1 - 12]) { ctx.beginPath(); ctx.arc(cx + dx * pw * .42, yy, 3, 0, TAU); ctx.fill() }
-      for (let k = 0; k < 5; k++) { ctx.beginPath(); ctx.arc(cx - pw * .3 + k * pw * .15, top + 9, 2, 0, TAU); ctx.fill() }
-      continue
-    }
-    ctx.fillStyle = BOAT.panelDark; ctx.fillRect(x0 + pw * i - 2, top, 4, panelH)
-    ctx.fillStyle = BOAT.cut
-    ctx.beginPath(); ctx.arc(cx, cy, 9, 0, TAU); ctx.fill()
-    for (let k = 0; k < 12; k++) { const a = k * TAU / 12
-      ctx.save(); ctx.translate(cx + Math.cos(a) * 21, cy + Math.sin(a) * 21); ctx.rotate(a)
-      ctx.beginPath(); ctx.ellipse(0, 0, 7, 3, 0, 0, TAU); ctx.fill(); ctx.restore() }
-    for (const dx of [-1, 1]) { ctx.beginPath(); ctx.arc(cx + dx * pw * .42, top + 20, 3, 0, TAU); ctx.fill()
-      ctx.beginPath(); ctx.arc(cx + dx * pw * .42, y1 - 18, 3, 0, TAU); ctx.fill() }
-  }
-  ctx.restore()
-  ctx.fillStyle = BOAT.rim
-  ctx.beginPath(); ctx.moveTo(x0 + r, top - 6); ctx.lineTo(x1 - r, top - 6); ctx.quadraticCurveTo(x1 + 2, top - 6, x1 + 2, top + r - 4)
-  ctx.lineTo(x1 - 4, top + r - 4); ctx.quadraticCurveTo(x1 - 4, top, x1 - r, top); ctx.lineTo(x0 + r, top)
-  ctx.quadraticCurveTo(x0 + 4, top, x0 + 4, top + r - 4); ctx.lineTo(x0 - 2, top + r - 4); ctx.quadraticCurveTo(x0 - 2, top - 6, x0 + r, top - 6); ctx.fill()
-  // the wake behind it
-  for (let k = 0; k < 4; k++) { const u = ((t / LT) * 8 + k / 4) % 1
-    ctx.fillStyle = `rgba(235,235,235,${(.45 * (1 - u)).toFixed(2)})`
-    ctx.fillRect(x0 - 20 - u * 220, y1 + 24 + (k % 2) * 10, 30 + u * 40, 5) }
-}
+const ALT = new Image(); ALT.src = "devsa-alt-logo.svg"   // the DEVSA alt mark, cut through the boat's panels
+const RIO = makeRioBoat({ ALT, ROCK, LT })   // the boat: rio-boat.js
+const BOAT = RIO.BOAT
+const barge = t => RIO.barge(ctx, t)
 
 // the rider: Linux San Antonio's pixel penguin (drawn by DEVSA for the group), nodding to the beat
 const RIDER = new Image(); RIDER.src = "penguin.png"
-const ALT = new Image(); ALT.src = "devsa-alt-logo.svg"
 // PySanAntonio's mascot, as drawn: never pixelated (it would clash with the PySA wordmark)
 const PYSA = new Image(); PYSA.src = "pysa-mascot-full.webp"
 // DEVSA FM's agents riding along, seated behind the panels: one up front, one between Tux and the
@@ -586,15 +522,7 @@ function luminarias(t) {
   }
 }
 // chasing bulbs along the barge's rim (inside the boat's translate, so they ride with it)
-function bargeBulbs(t) {
-  const x0 = 470, x1 = 1110, y = 800 + ROCK(t) - 6, C = [TEAL, PINK, ORANGE, GOLD], step = Math.floor(t * 6)
-  ctx.strokeStyle = "rgba(255,255,255,.25)"; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x0 + 30, y); ctx.lineTo(x1 - 30, y); ctx.stroke()
-  for (let x = x0 + 36, i = 0; x < x1 - 30; x += 20, i++) {
-    const c = C[(i + step) % 4], on = (i + step) % 4 === 0 ? 1 : .55
-    ctx.save(); ctx.globalCompositeOperation = "lighter"; glowDot(x, y + 3, 14, xrgba(c, 1).slice(5, -7), .4 * on); ctx.restore()
-    ctx.fillStyle = c; ctx.globalAlpha = .6 + .4 * on; ctx.beginPath(); ctx.arc(x, y + 3, 4.5, 0, TAU); ctx.fill(); ctx.globalAlpha = 1
-  }
-}
+function bargeBulbs(t) { RIO.bulbs(ctx, t) }
 // a Santa hat set on the mascot's sombrero and a red scarf at the penguin's neck: drawn over, images unaltered
 function xmasOutfits(t) {
   const beat = beatPh(t), px = 6

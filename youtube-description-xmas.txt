@@ -7,12 +7,12 @@ DEVSA FM's Christmas edition: Tejano lofi radio for San Antonio's learners and b
 Press play and keep building. On screen, Christmas in San Antonio, drawn in ASCII with pixel snow, and every scene moves to its own song:
 · the DEVSA tree, from the DEVSA TV studio desk
 · the ride downtown: the bus in a holiday wrap, past Mission San José and the boots outlined in lights
-· movie night at Mission Marquee Plaza: the old drive-in screen in lights, the cast on blankets and lawn chairs, devsa.community's "Where San Antonio Builds." on the big screen over DEVSA's event photos, and the penguin keeping the cocoa stand
-· the DEVSA Express: a holiday train carrying every community group in DEVSA's network, with Santa's sleigh overhead
-· holiday traffic past the Alamodome, next door to the station: a tree in a pickup's bed, antlers on a sedan, the cast walking the sidewalk to the dome with a gift, and once a loop the roadster, the penguin at the wheel, lifting off into the night
-· the holiday market at La Villita: booths for Access Granted, PySanAntonio and localhost:210, and chips and guac
+· the gift station at Market Square: under papel picado and a lit tree, the agents wrap, check and ship seven gifts into Santa's sleigh, Tux keeps the log, and Santa walks in to climb aboard
+· movie night at Mission Marquee Plaza: the old drive-in screen in lights, the cast on blankets and lawn chairs, and on the big screen devsa.community's "Where San Antonio Builds." over DEVSA's event photos, then a countdown and trailers for localhost:210, PySanAntonio, Access Granted, The Model and More Human Than Human, while the penguin keeps the cocoa stand
+· the DEVSA Express rolling past the Alamodome, a holiday train carrying every community group in DEVSA's network, the cast waving from the crossing
+· a Christmas show at the Arneson River Theatre in La Villita: the PySanAntonio mascot on guitar and Linux San Antonio's penguin on keys under the lit bell arches, the river boats carrying elves between the stage and the steps
 · San Fernando Cathedral's Christmas light show: luminarias, a nochebuena, papel picado, ornaments and a DEVSA terminal
-· the River Walk parade: three barges of elves, with Linux San Antonio's penguin, the PySanAntonio mascot and DEVSA FM's agents
+· Christmas on Houston Street: the Rand Building with its 1913 clock and a tree in the lobby, wreaths and garland, the street trees wrapped in lights, its third floor lit for a DEVSA meetup, and the cast walking in with laptops and tamales
 · the Alamo Python taco truck, wrapped in lights, with conchas on the board and the penguin shipping an MCP server for the DEVSA calendar
 · and a New Year finale: the DEVSA mark and pixel fireworks
 

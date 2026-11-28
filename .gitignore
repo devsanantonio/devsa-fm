@@ -25,3 +25,6 @@ _site/
 
 # the devsa.community hero photos for the Marquee Plaza screen (copied from next-devsa/public/hero)
 scene/hero/
+
+# the Marquee screen's trailers: frames and photos from next-devsa, kept local like the hero
+scene/trailers/

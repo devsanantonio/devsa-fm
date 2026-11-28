@@ -20,8 +20,12 @@
   screen, speakers on stands at its ends; a treeline and the city's glow over the wall; the lawn. Our own
   drawing of the place, not a trace of any photograph.
 
-  On the screen, in full colour, devsa.community's hero: "Where San Antonio" and its typed word (Builds, Connects,
-  Grows, Learns) over the wall of 22 event photos in scrolling columns, tilted as the site tilts them. The photos are local only (scene/hero/, out of git), copied from next-devsa's public/hero/.
+  On the screen, in full colour, a program: first devsa.community's hero, "Where San Antonio" and its typed word
+  (Builds, Connects, Grows, Learns) over the wall of 22 event photos in scrolling columns, tilted as the site tilts
+  them; then a picture-house ident (a film leader counting down, the DEVSA alt mark and "presents" in a ring of
+  marquee bulbs) and a short trailer for each of DEVSA's own, localhost:210, PySanAntonio, Access Granted, The Model
+  and More Human Than Human, each its mark, its moving picture from the site and a version of its page's hook. The photos
+  and frames are local only (scene/hero/ and scene/trailers/, out of git), copied from next-devsa's public/.
 
   In colour, for Christmas: bulbs along the tower's edges and the wall's top stepping on the beat, a wreath on the
   tower over the screen, luminarias along the lawn, the screen's light falling on the lawn.
@@ -173,10 +177,9 @@ function heroText(t) {
   if (Math.floor(t / 1.1 * 2) % 2 === 0) { ctx.fillStyle = "#ef426f"; ctx.fillRect(cx, l2 - size * .72, size * .42, size * .78) }
   ctx.letterSpacing = "0px"
 }
-function screen(t) {
+function heroWall(t) {
   const { x, y, w, h } = SCREEN, gap = 10, cw = (w - (COLS_N + 1) * gap) / COLS_N, ch = cw * 4 / 3
-  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip()
-  ctx.fillStyle = "#0a0a0a"; ctx.fillRect(x, y, w, h)
+  ctx.save()
   ctx.translate(x + w / 2, y + h / 2); ctx.rotate(2 * Math.PI / 180); ctx.scale(1.12, 1.12); ctx.translate(-w / 2, -h / 2)   // the hero's tilt
   COLUMNS.forEach((col, c) => {
     const len = col.length * (ch + gap), dir = c % 2 ? 1 : -1, off = ((t / T) * COL_CYCLES[c] * len) % len
@@ -189,6 +192,159 @@ function screen(t) {
   })
   ctx.restore()
   heroText(t)
+}
+
+// ---- the trailers -------------------------------------------------------------------------------------
+// After the hero, the screen runs a short trailer for each of DEVSA's own: Access Granted, PySanAntonio, The Model,
+// More Human Than Human and localhost:210. Each is its brand's mark, its moving picture (the padlock loop, the
+// mascot clip, The Model's 8-bit critters, the head, the localhost:210 dot map) and its page's hero paragraph,
+// word for word, set as the page sets it: the body muted, the turn in white. The assets are copied from next-devsa
+// into scene/trailers/ (out of git, like the hero); without them each trailer still runs as its words.
+const PROGRAM = [["hero", 15], ["ident", 10], ["localhost", 19], ["pysa", 19], ["ag", 19], ["model", 19], ["mh", 19]]   // seconds; 120 in all
+const PSCALE = T / PROGRAM.reduce((a, [, d]) => a + d, 0)
+const [AGS] = fm.loadImg("trailers/ag-sheet.jpg"), [PYS] = fm.loadImg("trailers/pysa-sheet.jpg"), [MHS] = fm.loadImg("trailers/mh-sheet.jpg")
+const [ALTMARK] = fm.loadImg("devsa-alt-logo.svg"), [PYWORD] = fm.loadImg("wordmark-dark.svg"), [LHWORD] = fm.loadImg("localhost-210-wordmark-dark.svg")
+const SHEETS = { ag: { im: AGS, fw: 352, fh: 300, cols: 12, n: 102, fps: 12 }, pysa: { im: PYS, fw: 464, fh: 300, cols: 12, n: 85, fps: 12 },
+                 mh: { im: MHS, fw: 480, fh: 270, cols: 10, n: 100, fps: 8 } }
+const FACES = [new FontFace("Oswald", "url(fonts/Oswald-700.ttf)", { weight: "700" }), new FontFace("Geist", "url(fonts/Geist-SemiBold.woff2)", { weight: "600" })]
+const facesReady = Promise.all(FACES.map(f => f.load().then(f => document.fonts.add(f), () => {})))
+let LH = null
+const dataReady = fetch("trailers/localhost-hero.json").then(r => r.json()).then(d => { LH = d }, () => {})
+// the hero paragraphs, from each page (next-devsa), as runs: b the muted body, w the turn in white, s the white
+// semibold lead (localhost:210's), m The Model's paragraph, all at white/80 as its page sets it
+const HOOKS = {
+  ag: [["b", "DEVSA's security conference, built with San Antonio's hacker community. Every other room is people talking about technology."], ["w", "This one is people taking it apart."]],
+  pysa: [["b", "DEVSA's Python conference, for the people writing Python in San Antonio. Talks on agents, testing and what AI is doing to the craft,"], ["w", "and a round of Python Jeopardy, because it should still be fun."]],
+  model: [["m", "DEVSA's AI conference for creators, creatives, founders and builders. Cool vibes, great company, and a room full of people showing each other what comes next — the work itself, not a description of it."]],
+  mh: [["b", "DEVSA's AI conference for developers and engineers: the people building software factories, agent harnesses and everything that runs on them."], ["w", "When the code writes itself, the job is building what writes it."]],
+  localhost: [["s", "Eight APIs. No one place to find them."], ["b", "localhost:210 is the bridge to all of San Antonio's open data, and to the people who want to explore it."]],
+}
+const RUN_STYLE = { b: ["500", .72], w: ["500", 1], s: ["600", 1], m: ["500", .82] }
+const ACCENT = { ag: "#00ff66", pysa: "#4a90d9", model: "#C0B4FC", mh: "#ff9900", localhost: "#ff8200" }
+function frame(k, u, dx, dy, dh) {                          // a clip's frame at u seconds, looping, drawn dh tall
+  const S = SHEETS[k]; if (!S.im.complete || !S.im.naturalWidth) return
+  const f = Math.floor(u * S.fps) % S.n, sx = (f % S.cols) * S.fw, sy = Math.floor(f / S.cols) * S.fh
+  ctx.drawImage(S.im, sx, sy, S.fw, S.fh, dx, dy, dh * S.fw / S.fh, dh)
+}
+const appear = (u, at, d = .7) => fm.ease(fm.clamp01((u - at) / d))
+function hook(k, u) {                                     // the paragraph, wrapped word by word across its runs, with the page's accent rule
+  const { x, y, h } = SCREEN, tx = x + 46, maxW = k === "pysa" || k === "model" ? 360 : 400, size = 18, lh = size * 1.38
+  const words = []; HOOKS[k].forEach(([st, text], r) => text.split(" ").forEach(wd => words.push({ st, wd, r })))
+  const lines = [[]]; let lw = 0
+  ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"
+  for (const w of words) {
+    ctx.font = `${RUN_STYLE[w.st][0]} ${size}px "Geist"`; w.w = ctx.measureText(w.wd).width; const sp = ctx.measureText(" ").width
+    if (lw && lw + sp + w.w > maxW) { lines.push([]); lw = 0 }
+    w.x = lw ? lw + sp : 0; lw = w.x + w.w; lines[lines.length - 1].push(w)
+  }
+  const top = y + h - 30 - lines.length * lh
+  ctx.fillStyle = ACCENT[k]; ctx.globalAlpha = appear(u, 2.2); ctx.fillRect(x + 30, top + 4, 3, lines.length * lh); ctx.globalAlpha = 1   // the border-l-2 rule
+  lines.forEach((ln, li) => ln.forEach(w => {
+    const a = appear(u, w.r ? 6.5 : 2.5) * RUN_STYLE[w.st][1]; if (a <= 0) return
+    ctx.font = `${RUN_STYLE[w.st][0]} ${size}px "Geist"`; ctx.fillStyle = `rgba(255,255,255,${a.toFixed(3)})`
+    ctx.fillText(w.wd, tx + w.x, top + (li + 1) * lh - 5)
+  }))
+}
+function hold(alpha = .92) {                             // the dark hold on the left, as the hero has, so the words read over the picture
+  const { x, y, w, h } = SCREEN, sh = ctx.createLinearGradient(x, 0, x + w, 0)
+  sh.addColorStop(0, `rgba(10,10,10,${alpha})`); sh.addColorStop(.55, `rgba(10,10,10,${alpha * .8})`); sh.addColorStop(.8, "rgba(10,10,10,.1)"); sh.addColorStop(1, "rgba(10,10,10,0)")
+  ctx.fillStyle = sh; ctx.fillRect(x, y, w, h)
+}
+// The Model's mascot: the 8-bit lavender critter from its SASTW reel, two eyes, arms out, four legs
+const CRITTER = ["..############..", "..############..", "..##.######.##..", "..##.######.##..", "################", "################",
+                 "..############..", "..############..", "...#.#....#.#...", "...#.#....#.#..."]
+function critter(cx, cy, px, a, step) {
+  ctx.globalAlpha = a; ctx.fillStyle = "#C0B4FC"
+  CRITTER.forEach((row, ry) => [...row].forEach((c, rx) => { if (c !== "#") return
+    const leg = ry >= 8 ? (((rx < 8) === step) ? -px : 0) : 0
+    ctx.fillRect(Math.round(cx + (rx - 8) * px), Math.round(cy + (ry - 5) * px + leg), px, px) }))
+  ctx.globalAlpha = 1
+}
+const CRITTERS = Array.from({ length: 9 }, (_, i) => ({ x: hash(i, 61), y: .08 + hash(i, 62) * .84, px: [3, 3, 4, 4, 5, 6][i % 6], a: .6 + .4 * hash(i, 63), sp: 3 + hash(i, 64) * 6, ph: hash(i, 65) * TAU }))
+function wordmark(k, u) {                                // each brand's mark, top left, as its page sets it
+  const { x, y } = SCREEN; ctx.globalAlpha = appear(u, .4, .8); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"
+  if (k === "ag") { ctx.font = '700 46px "Oswald"'; ctx.fillStyle = "#00ff66"; ctx.fillText("ACCESS", x + 30, y + 78); const aw = ctx.measureText("ACCESS ").width; ctx.fillStyle = "#fff"; ctx.fillText("GRANTED", x + 30 + aw, y + 78) }
+  if (k === "pysa" && PYWORD.complete && PYWORD.naturalWidth) ctx.drawImage(PYWORD, x + 30, y + 34, 280, 280 * 958 / 4066)
+  if (k === "model") { ctx.font = '700 38px "Geist Mono"'; ctx.fillStyle = "rgba(255,255,255,.85)"; ctx.fillText("THE", x + 30, y + 74); const tw = ctx.measureText("THE ").width, mw = ctx.measureText("MODEL").width
+    ctx.fillStyle = "#C0B4FC"; ctx.fillRect(x + 30 + tw - 6, y + 42, mw + 12, 44); ctx.fillStyle = "#09090B"; ctx.fillText("MODEL", x + 30 + tw, y + 74) }
+  if (k === "mh") { ctx.font = '900 36px "Geist"'; ctx.fillStyle = "#e5e5e5"; ctx.fillText("MORE HUMAN", x + 30, y + 66); ctx.fillStyle = "#ff9900"; ctx.fillText("THAN HUMAN", x + 30, y + 100) }
+  if (k === "localhost" && LHWORD.complete && LHWORD.naturalWidth) ctx.drawImage(LHWORD, x + 30, y + 42, 280, 280 * 198 / 1548)
+  ctx.globalAlpha = 1
+}
+// the ident before the trailers, the picture-house way: a film leader counting down 3, 2, 1 (a sweeping hand, grain,
+// flicker), a flash, then the DEVSA alt mark rising in the projector's light with "presents" under it, while a ring of
+// marquee bulbs chases round the screen. The mark stands alone: never the word DEVSA beside it.
+const IDENT_FLASH = 4.2
+function bulbRing(u, a) {
+  const { x, y, w, h } = SCREEN, step = 22, pts = []
+  for (let i = 0; i < w; i += step) pts.push([x + 11 + i, y + 11], [x + w - 11 - i, y + h - 11])
+  for (let j = step; j < h - step; j += step) pts.push([x + 11, y + 11 + j], [x + w - 11, y + h - 11 - j])
+  const k = Math.floor(u * 8)
+  pts.forEach(([px, py], i) => { const on = (i + k) % 3 === 0
+    if (on) lit(() => glow(px, py, 12, 12, `rgba(255,214,120,${(.6 * a).toFixed(3)})`))
+    ctx.fillStyle = on ? `rgba(255,236,170,${a.toFixed(3)})` : `rgba(150,110,50,${(.6 * a).toFixed(3)})`; ctx.beginPath(); ctx.arc(px, py, 3.2, 0, TAU); ctx.fill() })
+}
+function ident(u) {
+  const { x, y, w, h } = SCREEN, cx = x + w / 2, cy = y + h / 2
+  if (u < IDENT_FLASH) {                                  // the leader
+    const n = 3 - Math.floor(u / 1.4), f = (u % 1.4) / 1.4, fl = .9 + .1 * hash(Math.floor(u * 24), 3)
+    ctx.fillStyle = `rgb(${Math.round(150 * fl)},${Math.round(140 * fl)},${Math.round(122 * fl)})`; ctx.fillRect(x, y, w, h)
+    ctx.fillStyle = `rgba(60,54,46,${(.55).toFixed(2)})`; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, 400, -Math.PI / 2, -Math.PI / 2 + TAU * f); ctx.fill()   // the sweep
+    ctx.strokeStyle = "rgba(20,18,16,.8)"; ctx.lineWidth = 3
+    ctx.beginPath(); ctx.moveTo(x, cy); ctx.lineTo(x + w, cy); ctx.moveTo(cx, y); ctx.lineTo(cx, y + h); ctx.stroke()
+    for (const r of [120, 150]) { ctx.beginPath(); ctx.arc(cx, cy, r, 0, TAU); ctx.stroke() }
+    ctx.font = '900 190px "Geist"'; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillStyle = "rgba(16,14,12,.9)"; ctx.fillText(String(Math.max(1, n)), cx, cy + 8)
+    for (let i = 0; i < 40; i++) { ctx.fillStyle = `rgba(20,18,16,${(.15 + .3 * hash(i, Math.floor(u * 24))).toFixed(3)})`   // grain and a scratch
+      ctx.fillRect(x + hash(i, Math.floor(u * 24) + 7) * w, y + hash(i + 50, Math.floor(u * 24)) * h, 2, 2) }
+    ctx.fillStyle = "rgba(240,235,220,.35)"; ctx.fillRect(x + w * hash(Math.floor(u * 6), 9), y, 1.5, h)
+    return
+  }
+  const v = u - IDENT_FLASH
+  ctx.fillStyle = "#070708"; ctx.fillRect(x, y, w, h)
+  const beam = ctx.createRadialGradient(cx, cy - 10, 0, cx, cy - 10, w * .5); beam.addColorStop(0, `rgba(255,236,200,${(.16 * fm.clamp01(v / .8)).toFixed(3)})`); beam.addColorStop(1, "rgba(255,236,200,0)")
+  ctx.fillStyle = beam; ctx.fillRect(x, y, w, h)
+  if (ALTMARK.complete && ALTMARK.naturalWidth) { const a = appear(v, .3, .9), mw = 190, mh = mw * 551.77 / 735.7
+    ctx.globalAlpha = a; ctx.drawImage(ALTMARK, cx - mw / 2, cy - mh / 2 - 26 + (1 - a) * 14, mw, mh); ctx.globalAlpha = 1 }
+  ctx.globalAlpha = appear(v, 1.4); ctx.font = '700 22px "Geist Mono"'; ctx.letterSpacing = "10px"; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"
+  ctx.fillStyle = "rgba(255,255,255,.85)"; ctx.fillText("PRESENTS", cx + 5, cy + 104); ctx.letterSpacing = "0px"; ctx.globalAlpha = 1
+  bulbRing(v, fm.clamp01(v / .5))
+  if (v < .35) { ctx.fillStyle = `rgba(255,250,235,${(1 - v / .35).toFixed(3)})`; ctx.fillRect(x, y, w, h) }   // the flash
+}
+const TRAILER = {
+  ag(u) { const { x, y, w, h } = SCREEN; ctx.fillStyle = "#000"; ctx.fillRect(x, y, w, h); frame("ag", u, x + w - 300, y + 30, 300); hold(.85) },
+  pysa(u) { const { x, y, w, h } = SCREEN; ctx.fillStyle = "#050608"; ctx.fillRect(x, y, w, h); frame("pysa", u, x + w - 290, y + 80, 210); hold(.85) },
+  model(u) {                                              // the critters drifting across a dark room, walking in place, as in the reel
+    const { x, y, w, h } = SCREEN; ctx.fillStyle = "#09090b"; ctx.fillRect(x, y, w, h)
+    const gl = ctx.createRadialGradient(x + w * .7, y + h * .5, 0, x + w * .7, y + h * .5, w * .5); gl.addColorStop(0, "rgba(192,180,252,.08)"); gl.addColorStop(1, "rgba(192,180,252,0)"); ctx.fillStyle = gl; ctx.fillRect(x, y, w, h)
+    hold(.88)
+    const x0 = x + 430                                     // they keep to the right, clear of the words
+    for (const c of CRITTERS) { const span = x + w - x0 - 16 * c.px + 40
+      critter(x0 + 8 * c.px + ((c.x * span + u * c.sp) % span), y + c.y * h + Math.sin(u * 2 + c.ph) * 3, c.px, c.a, Math.floor(u * 4 + c.ph) % 2 === 0) }
+  },
+  mh(u) { const { x, y, w, h } = SCREEN; ctx.fillStyle = "#000"; ctx.fillRect(x, y, w, h); frame("mh", u, x + w - 440, y + 50, 280); hold(.8) },
+  localhost(u) {                                          // the hero's dot map: buildings from Bexar County's 1896 maps (teal), City permits since 2025 (pink), VIA stops (orange), in that order
+    const { x, y, w, h } = SCREEN; ctx.fillStyle = "#0a0a0a"; ctx.fillRect(x, y, w, h)
+    if (LH) { const A = LH.aspect, s = (h - 30) / 8400, ox = x + w - 8500 * A * s - 10, oy = y + 10 - 300 * s
+      ;[["bexar", TEAL, 1], ["cosa", PINK, 5], ["via", ORANGE, 9]].forEach(([key, c, at]) => {
+        const p = LH[key].pts, a = appear(u, at, 2.5); if (a <= 0) return
+        ctx.fillStyle = c; ctx.globalAlpha = .75 * a; const n = Math.floor(p.length / 2 * a)
+        for (let i = 0; i < n * 2; i += 2) ctx.fillRect(ox + p[i] * A * s, oy + p[i + 1] * s, 1.6, 1.6)
+      }); ctx.globalAlpha = 1 }
+    hold(.9)
+  },
+}
+function screen(t) {
+  const { x, y, w, h } = SCREEN
+  let u = t, k = 0; while (k < PROGRAM.length - 1 && u >= PROGRAM[k][1] * PSCALE) { u -= PROGRAM[k][1] * PSCALE; k++ }
+  const [kind, dur0] = PROGRAM[k], dur = dur0 * PSCALE
+  ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip()
+  ctx.fillStyle = "#0a0a0a"; ctx.fillRect(x, y, w, h)
+  if (kind === "hero") heroWall(t)
+  else if (kind === "ident") ident(u)
+  else { TRAILER[kind](u); wordmark(kind, u); hook(kind, u) }
+  const fade = Math.max(0, 1 - u / .45, 1 - (dur - u) / .45)           // each one cuts through black to the next
+  if (fade > 0) { ctx.fillStyle = `rgba(0,0,0,${fade.toFixed(3)})`; ctx.fillRect(x, y, w, h) }
+  ctx.restore()
   avgCtx.drawImage(ctx.canvas, x, y, w, h, 0, 0, 1, 1); const d = avgCtx.getImageData(0, 0, 1, 1).data; screenRGB = [d[0], d[1], d[2]]
   // soft edges: a vignette inside the frame, so the picture sits in the night rather than on it
   const v = ctx.createRadialGradient(x + w / 2, y + h / 2, h * .45, x + w / 2, y + h / 2, w * .62)
@@ -283,7 +439,8 @@ const ROWS3 = [
   { base: 1000, px: 5, seats: [[430, "#c8323c", ["a", ORANGE, "cheer"]], [580, "#b8508f", "drape:#1f4f46"], [1190, "#6a4aa0", ["e", TEAL, 0, 2, "blanket"]], [1360, "#2f5fb0", null], [1530, "#c8323c", ["a", TEAL]], [1700, "#b8508f", ["e", PINK, 3, 1]]] }]
 // the moments: a whisper (t 24 to 31), a blanket pulled up (t 78 to 108), a cheer each time "Builds." finishes typing
 const whisper = t => Math.sin(Math.PI * fm.clamp01((t - 24) / 7))
-const cheer = t => { const u = t % CYCLE - WORD_T[0].type; return u > 0 && u < 1.4 ? 1 : 0 }
+const cheer = t => { const u = t - WORD_T[0].type, f = t - (PROGRAM[0][1] * PSCALE + IDENT_FLASH)   // when "Builds." first types, and on the ident's flash
+  return (t < CYCLE && u > 0 && u < 1.4) || (f > 0 && f < 1.6) ? 1 : 0 }
 function seat(x, base, px, who, t, k) {
   if (!who) return
   const seatY = base - 9 * px                             // high enough that heads and shoulders clear the chair's back
@@ -379,7 +536,7 @@ function render(t) {
   snow(t)
   footer(t)
 }
-fm.start(render, [heroReady, penguinReady, document.fonts.load('900 50px "Geist"'), document.fonts.load('italic 400 50px "Geist"')])
+fm.start(render, [heroReady, penguinReady, facesReady, dataReady, ...[AGS, PYS, MHS, ALTMARK, PYWORD, LHWORD].map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r })), document.fonts.load('900 50px "Geist"'), document.fonts.load('italic 400 50px "Geist"')])
 </script>
 </body>
 </html>

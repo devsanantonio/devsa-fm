@@ -21,8 +21,8 @@
 #   room                 the ASCII room                         music-tejano/ (DURATION=n for longer; runs faster than real time)
 #
 #   xmas                 the Christmas FM edition (from the day after Thanksgiving): popping into downtown spaces: the
-#                        DEVSA tree, the bus ride, movie night at Mission Marquee Plaza, the Express, holiday traffic past the Alamodome (next to the station),
-#                        La Villita, San Fernando's show, the River Walk parade, the taco truck, the New Year finale. Each synced to a track in music-xmas/ (ElevenLabs, see LICENSES.txt).
+#                        DEVSA tree, the bus ride, the gift station at Market Square, movie night at Mission Marquee Plaza, the Express passing the Alamodome,
+#                        the band at the Arneson River Theatre, San Fernando's show, the Rand Building on Houston Street, the taco truck, the New Year finale. Each synced to a track in music-xmas/ (ElevenLabs, see LICENSES.txt).
 #   mix                  the show: commute-night, fish, court, taco, rand, paseo, cathedral, riverwalk. Each
 #                        scene is synced to one song (the table in scene_env) and changes when the
 #                        song ends, so a cut always lands on a song change.
@@ -44,7 +44,7 @@ _MUSIC="${MUSIC_DIR:-}"
 [ -f config.env ] && source config.env
 DURATION="${_DUR:-${DURATION:-9000}}"     # 2.5 hours
 MIX_ORDER=(commute-night fish court taco rand paseo cathedral riverwalk)
-XMAS_ORDER=(xmas-tree commute-xmas xmas-marquee xmas-express dome-xmas xmas-lavillita cathedral-xmas riverwalk-xmas taco-xmas xmas-finale)   # opens and closes on the two DEVSA TV desk graphics (ep1 tree, ep2 fireworks)
+XMAS_ORDER=(xmas-tree commute-xmas paseo-xmas xmas-marquee dome-xmas xmas-arneson cathedral-xmas rand-xmas taco-xmas xmas-finale)   # opens and closes on the two DEVSA TV desk graphics (ep1 tree, ep2 fireworks)
                                                                                            # the plaza, the truck, then fireworks   # an evening: calm, calm, the game, a breather, the concert,
                                                                             # then the walk downtown: Market Square, San Fernando, the river
 
@@ -92,11 +92,12 @@ scene_env() {
     commute-xmas)   SCENE=commute.html;   SCENE_QUERY=xmas; xsong=tamal ;;
     xmas-tree)      SCENE=xmas-tree.html;    xsong=tree ;;
     xmas-marquee)   SCENE=xmas-marquee.html; xsong=tree ;;   # movie night at Mission Marquee Plaza; devsa.community's hero photos on its screen
-    xmas-express)   SCENE=xmas-express.html; xsong=cartridge ;;
     riverwalk-xmas) SCENE=riverwalk.html; SCENE_QUERY=xmas; xsong=nocturne ;;
     cathedral-xmas) SCENE=cathedral.html; SCENE_QUERY=xmas; xsong=mistletoe ;;
-    xmas-lavillita) SCENE=xmas-lavillita.html; xsong=nocturne ;;
-    dome-xmas)      SCENE=dome.html;      SCENE_QUERY=xmas; xsong=mistletoe ;;   # not cartridge: the Express, just before it, has that one
+    paseo-xmas)     SCENE=paseo.html;     SCENE_QUERY=xmas; xsong=mistletoe ;;   # the gift station at Market Square: wrap, check, ship; Santa comes for the sleigh
+    rand-xmas)      SCENE=rand.html;      SCENE_QUERY=xmas; xsong=cartridge ;;   # the Rand Building on Houston Street, its windows in a holiday show, the third floor lit for a meetup
+    xmas-arneson)   SCENE=xmas-arneson.html; xsong=nocturne ;;   # the band at the Arneson River Theatre, La Villita
+    dome-xmas)      SCENE=dome.html;      SCENE_QUERY=xmas; xsong=cartridge ;;   # the Express passing the dome: the train's track, its bell on the beat
     taco-xmas)      SCENE=taco.html;      SCENE_QUERY=xmas; xsong=tamal ;;
     xmas-finale)    SCENE=xmas-finale.html;  xsong=spark ;;
   esac

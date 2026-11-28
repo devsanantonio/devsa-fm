@@ -24,20 +24,22 @@
   beat. Everything else runs on ~60 s cycles, a whole number per loop (LT).
   1920x1080, a seamless T-second loop: render(t) draws a frame.
 
-  ?xmas, the Christmas edition: the street in front of the dome held still, and holiday traffic on it, the highway
-  strip that runs past the Alamodome, kept light: a pixel pickup with a tree in its bed heading one way, a sedan
-  in antlers and a red nose the other, each lane a whole number of passes a loop so it stays seamless. Once a loop
-  the roadster comes through, the penguin at the wheel and an elf beside it, fires its thrusters, climbs over the
-  street and flies out of the right edge. The street is drawn in colour (asphalt, kerbs, a dashed centre line,
-  streetlamps with warm pools); once a loop the penguin, two elves and an agent carrying a gift walk the sidewalk
-  across the front toward the dome. No sleigh here: the roadster is this scene's flight. 
-  The dome's glass band chases in red, green and the tab colours, lights strung along the roof edge, the mast lamps
-  alternating red and green. Pixel snow, and the DEVSA FM radio in the footer. (A Jingle 5K ran here until
-  2026-11-25, and briefly an ice rink, which hid too much of the street.)
+  ?xmas, the Christmas edition: the dome lit for the holidays, and the DEVSA Express (express-train.js) passing in
+  front of it on the rail line that runs by the Alamodome: the engine, a container per community group with its logo,
+  the DEVSA boxcar or the PySanAntonio flatcar, and the caboose. The groups are split over two passes a loop, left to
+  right, with gaps between them where only the dome, its lights and the snow are on screen; the loop starts and ends
+  on an empty track. A crossing at the left (its lamps blink and its gate comes down before each pass) with the
+  cast waiting behind it on the sidewalk, waving at the cars; the street in front. Before each pass the engine's
+  headlamp lights the track; after it, the dome's glass
+  band chases bright. Bulbs strung on the masts' cables, a warm wash on the roof, the skyline at the right dimmed. The dome's glass band chases in red, green and
+  the tab colours, lights strung along the roof edge, the mast lamps alternating red and green. Pixel snow, and the
+  DEVSA FM radio in the footer. (A Jingle 5K ran here until 2026-11-25, then holiday traffic and the flying roadster
+  until 2026-11-27; the Express was its own scene until it moved here.)
 -->
 <canvas id="c" width="1920" height="1080"></canvas>
 <script src="plush.js"></script>
 <script src="xmas-sprites.js"></script>
+<script src="express-train.js"></script>
 <script>
 const XMAS = new URLSearchParams(location.search).has("xmas")   // Christmas: see the ?xmas notes in the header
 const B = window.BEATS || null
@@ -157,6 +159,19 @@ function paint(t) {
     if (front) for (const k of [1, 2]) line(x, top + 1, x - toward * k * 4, FACE_TOP + 1, .3, .45)
   }
   // the plaza, then the road with its dashed centre line scrolling left
+  if (XMAS) {                                        // Christmas: the plaza runs down to the track bed, no road
+    const R = RAIL / CELL
+    for (let y = PLAZA; y < R; y++) box(0, y, COLS + XSHIFT, 1, .3 - .16 * (y - PLAZA) / (R - PLAZA))   // the plaza, lit brightest at the dome's foot
+    for (let y = PLAZA + 2; y < R - 2; y += 3) for (let x = (y % 2) * 3; x < COLS + XSHIFT; x += 6) box(x, y, 4, 1, .36 - .18 * (y - PLAZA) / (R - PLAZA))   // its paving
+    box(ROOF_L - 2, PLAZA, ROOF_R - ROOF_L + 4, 1, .5)                                     // the dome's plinth along its foot
+    for (const cx of [ROOF_L + 10, ROOF_R - 10]) for (let k = 0; k < 4; k++) box(cx - 8 - k * 2, PLAZA + 1 + k, 16 + k * 4, 1, .46 - k * .05)   // steps down from each entrance
+    box(0, R - 3, COLS + XSHIFT, 2, .22); for (let x = 0; x < COLS + XSHIFT; x += 2) box(x, R - 4 - (x * 7) % 2, 1, 1, .26)   // a low hedge along the track bed
+    box(0, R + 1, COLS, 4, .3); box(0, R + 5, COLS, ROWS - R - 5, .06)
+    box(0, R + 5, COLS, 1, .34); box(0, R + 6, COLS, 5, .18); for (let x = 0; x < COLS; x += 8) box(x, R + 6, 1, 5, .1)   // the sidewalk in front, its joints
+    box(0, R + 11, COLS, 1, .3); for (let x = 2; x < COLS; x += 10) box(x, R + 14, 5, 1, .26)   // the kerb, the street's dashed line
+    g.restore(); g.drawImage(sc, COLS - 2 * XSHIFT, PLAZA, XSHIFT, ROWS - PLAZA, COLS - XSHIFT, PLAZA, XSHIFT, ROWS - PLAZA)
+    return
+  }
   box(0, PLAZA, COLS, ROAD_TOP - PLAZA, .1)
   for (let x = 0; x < COLS; x += 3) box(x + ((x * 7) % 2), PLAZA + 2 + (x % 4), 1, 1, .2)
   box(0, ROAD_TOP, COLS, ROAD_BOT - ROAD_TOP, .16)
@@ -167,7 +182,7 @@ function paint(t) {
 
   // streetlamps on the far kerb, passing with the road, each with its pool of light
   const loff = XMAS ? 0 : (t * SPEED) % LAMP
-  if (!XMAS) {                                        // at Christmas the lamps are drawn in colour over the road (xmasStreet)
+  if (!XMAS) {                                        // at Christmas the lamps are drawn in colour behind the track (xmasLamps)
   g.save(); g.globalCompositeOperation = "lighten"
   for (let x = -LAMP; x < COLS + LAMP; x += LAMP) {
     const px = Math.round(x - loff + 20)
@@ -254,10 +269,6 @@ function roadster(t, F) {                                            // F: { x, 
     const pw = 96, ph = pw * PENGUIN.height / PENGUIN.width
     ctx.drawImage(PENGUIN, 196, -150 + Math.sin(TAU * BPM / 60 * (t - OFFSET)) * 2 * (f.alt < 4 ? 1 : 0), pw, ph)
   }
-  if (XMAS) {                                                        // an elf beside the penguin, peeking over the glass
-    const px = 3.6, [ew] = xs.size(xs.ELF, px)            // the passenger seat, beside the penguin, not in front of it
-    xs.spr(ctx, xs.ELF, { ...xs.PAL, E: TEAL, S: "#9a6440", s: "#7c4e30" }, 306 - ew / 2, -150 + Math.sin(TAU * BPM / 60 * (t - OFFSET) + 1) * 2 * (f.alt < 4 ? 1 : 0), px)
-  }
   // the body: deep red, a long falling nose, a fuller rear
   const body = new Path2D()
   body.moveTo(6, -24)
@@ -292,7 +303,6 @@ function roadster(t, F) {                                            // F: { x, 
   glow(8, -49, 60, "rgba(255,59,59,.4)"); glow(452, -48, 80, "rgba(255,240,200,.45)")
   ctx.restore()
 
-  if (XMAS) xmasDress(t)
   // the wheels: dark arches, low tyres, turbine-style hubs turning with the road
   for (const wx of [104, 368]) {
     const R = 36
@@ -308,171 +318,91 @@ function roadster(t, F) {                                            // F: { x, 
   ctx.restore()
 }
 
-// Christmas: reindeer antlers clipped to the glass, a red nose on the bumper, gifts strapped to the rear deck,
-// a wreath on the tail. Drawn in the roadster's own coordinates (0..470 along, negative up).
-function xmasDress(t) {
-  const P = 6, ANT = ["#..#..", "#.#..#", ".##.#.", "..##..", "..#...", "..#..."]
-  for (const [ax, flip] of [[200, false], [322, true]]) xs.spr(ctx, ANT, { "#": "#8a5a3a" }, ax - 3 * P, -152 - 6 * P, P, { flip })
-  ctx.save(); ctx.globalCompositeOperation = "lighter"; glow(468, -32, 40 + 14 * pulseAt(t), "rgba(255,40,40,.75)"); ctx.restore()
-  ctx.fillStyle = "#ff2b2b"; ctx.beginPath(); ctx.arc(468, -32, 11, 0, TAU); ctx.fill()
-  ctx.fillStyle = "rgba(255,255,255,.7)"; ctx.fillRect(463, -38, 4, 4)
-  ;[[40, 0, 3], [82, 1, 3], [60, 3, 2.4], [122, 2, 2.4]].forEach(([gx, w, px], i) => {
-    const [gw, gh] = xs.size(xs.GIFT, px); xs.spr(ctx, xs.GIFT, { ...xs.PAL, ...xs.WRAPS[w] }, gx - gw / 2, (i < 2 ? -88 : -88 - 26) - gh + 14, px)
+// Christmas: the DEVSA Express on the rail line in front of the dome, two passes a loop with gaps between them
+const RAIL = 900
+const PASSES = [[T * .03, T * .43], [T * .53, T * .93]]
+const EXPRESS = makeExpress({ ctx, W, RAIL, BPM, PENGUIN, PYSA, passes: PASSES })
+// streetlamps on the plaza behind the track, each with its warm pool; then the ballast under the ties, in colour
+// the ballast under the ties, in colour
+function ballast() {
+  ctx.strokeStyle = "rgba(60,62,70,.9)"; ctx.lineWidth = 2                                      // the fence along the track bed
+  ctx.beginPath(); ctx.moveTo(0, RAIL - 40); ctx.lineTo(W, RAIL - 40); ctx.moveTo(0, RAIL - 22); ctx.lineTo(W, RAIL - 22); ctx.stroke()
+  ctx.fillStyle = "rgba(60,62,70,.9)"; for (let x = 20; x < W; x += 80) ctx.fillRect(x, RAIL - 46, 4, 46)
+  ctx.fillStyle = "rgba(58,54,52,.85)"; ctx.fillRect(0, RAIL + 4, W, 40)
+  ctx.fillStyle = "rgba(0,0,0,.25)"; for (let x = 0; x < W; x += 9) ctx.fillRect(x + (x * 7) % 5, RAIL + 22 + (x * 13) % 18, 3, 3)
+}
+// the crossing, on the near side of the track at the left, where the train comes in: a post, the crossbuck, two red
+// lamps that blink and a gate arm that comes down a few seconds before the engine appears and lifts once the caboose
+// is past. Behind the gate on the sidewalk, the cast waits and waves at the containers going by
+const CROSS = 330, SIDEWALK = RAIL + 92
+const liftAt = ([t0, t1]) => { for (let tt = t0; tt <= t1; tt += .25) { const hh = EXPRESS.head(tt); if (hh && hh.hx - hh.len > CROSS + 160) return tt } return t1 }   // computed per frame: the train's length is only known once the logos load
+function gateDown(t) {
+  const ease = u => u < 0 ? 0 : u > 1 ? 1 : u * u * (3 - 2 * u)
+  for (let k = 0; k < PASSES.length; k++) { const t0 = PASSES[k][0], lift = liftAt(PASSES[k])
+    if (t >= t0 - 4 && t < lift + 2) return ease((t - (t0 - 4)) / 1.5) * (1 - ease((t - lift) / 1.5)) }
+  return 0
+}
+function crossing(t) {
+  const d = gateDown(t), base = SIDEWALK + 6, on = d > .05
+  ctx.fillStyle = "#2a2a32"; ctx.fillRect(CROSS - 5, base - 210, 10, 210); ctx.fillRect(CROSS - 16, base - 8, 32, 8)
+  ctx.save(); ctx.translate(CROSS, base - 196); ctx.fillStyle = "#ececec"
+  for (const a of [.6, -.6]) { ctx.save(); ctx.rotate(a); ctx.fillRect(-52, -7, 104, 14); ctx.restore() }
+  ctx.restore()
+  const ly = base - 140
+  ctx.fillStyle = "#1c1c22"; ctx.fillRect(CROSS - 48, ly - 14, 96, 28)
+  for (const [k, sx] of [[0, -30], [1, 30]]) {
+    const lit = on && Math.floor(t * 2.5) % 2 === k
+    if (lit) { ctx.save(); ctx.globalCompositeOperation = "lighter"; glow(CROSS + sx, ly, 60, "rgba(255,59,48,.55)"); glow(CROSS + sx, SIDEWALK + 20, 120, "rgba(255,59,48,.12)"); ctx.restore() }
+    ctx.fillStyle = lit ? "#ff3b30" : "#4a1a1a"; ctx.beginPath(); ctx.arc(CROSS + sx, ly, 11, 0, TAU); ctx.fill()
+  }
+}
+function gateArm(t) {
+  const d = gateDown(t), base = SIDEWALK + 6
+  ctx.save(); ctx.translate(CROSS + 8, base - 56); ctx.rotate(-Math.PI / 2 * (1 - d))   // the arm, pointing right along the sidewalk when down, in front of the cast
+  for (let k = 0; k < 10; k++) { ctx.fillStyle = k % 2 ? "#ececec" : "#d6223a"; ctx.fillRect(k * 34, -5, 34, 10) }
+  ctx.fillStyle = "#ff3b30"; ctx.beginPath(); ctx.arc(330, 0, 5, 0, TAU); ctx.fill(); ctx.restore()
+  ctx.fillStyle = "#2a2a32"; ctx.fillRect(CROSS - 2, base - 68, 22, 24)                                   // the arm's counterweight box
+}
+// the cast on the sidewalk behind the gate, waving while the containers pass
+const SKINS3 = [["#f2cfae", "#d9ab86"], ["#c2875a", "#a06c44"], ["#6e4428", "#55331e"], ["#e0a87e", "#c48a60"]]
+const WAITERS = [[470, "elf", PINK, 0], [560, "penguin"], [660, "agent", TEAL], [760, "elf", TEAL, 2], [850, "elf", ORANGE, 3]]
+function waiters(t) {
+  const h = EXPRESS.head(t), passing = !!h && h.hx > 0
+  WAITERS.forEach(([x, kind, c, sk], i) => {
+    const wave = passing && Math.sin(t * 7 + i) > 0, base = SIDEWALK
+    ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.beginPath(); ctx.ellipse(x, base, 24, 5, 0, 0, TAU); ctx.fill()
+    if (kind === "elf") { const px = 5, [w, hh] = xs.size(xs.ELF, px), ex = x - w / 2, ey = base - hh
+      xs.spr(ctx, xs.ELF, { ...xs.PAL, E: c, S: SKINS3[sk][0], s: SKINS3[sk][1] }, ex, ey, px)
+      if (wave) { ctx.fillStyle = SKINS3[sk][0]; ctx.fillRect(ex - px, ey + 5 * px, 2 * px, 3 * px) } }
+    if (kind === "penguin" && PENGUIN.complete) { const hh = 96, w = hh * PENGUIN.width / PENGUIN.height, hop = passing ? Math.abs(Math.sin(t * 6)) * 6 : 0
+      ctx.imageSmoothingEnabled = false; ctx.drawImage(PENGUIN, x - w / 2, base - hh - hop, w, hh); ctx.imageSmoothingEnabled = true }
+    if (kind === "agent") drawPlush(ctx, { x, y: base, s: .8, tint: c, number: "", t, look: -4, mouth: passing ? .7 : .3, seed: 3, armsUp: wave ? 1 : 0 })
   })
-  ctx.strokeStyle = "#1f8a46"; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(30, -60, 12, 0, TAU); ctx.stroke()
-  ctx.fillStyle = "#e8323c"; ctx.fillRect(25, -52, 10, 7)
 }
-// Christmas: a little traffic on the strip past the dome, drawn in pixels like the rest of the Christmas cast.
-// Few cars and far apart: the far lane carries one car heading left, the near lane one heading right plus the
-// roadster's slot. Each lane is a whole number of passes a loop, so the loop is seamless. [type, colour, decoration]
-const FAR = { y: 822, px: 4, dir: -1, n: 2, cars: [["sedan", "#c8ccd2", "antlers"]] }
-const NEAR = { y: 910, px: 5, dir: 1, n: 3, cars: [["pickup", "#1f3b63", "bedtree"], ["roadster"]] }
-const ROADSTER_PASS = 1                                    // which of the near lane's passes carries the roadster
-const XC = ["#e8323c", "#2fd06a", TEAL, PINK, ORANGE, "#ffd343"]
-// a car as a pixel grid, built from rects and circles, facing right. B body, b body highlight, D shadow, W glass,
-// w glass glint, L headlight, R tail light, K tyre, H hub, C chrome
-function carGrid(type) {
-  const W_ = type === "pickup" ? 50 : 46, H_ = 18, g2 = Array.from({ length: H_ }, () => Array(W_).fill("."))
-  const set = (x, y, c) => { if (x >= 0 && y >= 0 && x < W_ && y < H_) g2[y][x] = c }
-  const rect = (x, y, w, h, c) => { for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) set(xx, yy, c) }
-  const disc = (cx, cy, r, c) => { for (let yy = -r; yy <= r; yy++) for (let xx = -r; xx <= r; xx++) if (xx * xx + yy * yy <= r * r + r * .6) set(cx + xx, cy + yy, c) }
-  const R = W_ - 1, wheels = type === "pickup" ? [10, 39] : [10, 35]
-  // the body: a long box with eased corners, a highlight along its shoulder, a dark sill
-  rect(1, 8, W_ - 2, 7, "B"); rect(0, 9, W_, 5, "B"); set(1, 8, "."); set(R - 1, 8, ".")
-  rect(2, 9, W_ - 4, 1, "b"); rect(1, 13, W_ - 2, 1, "D")
-  if (type === "sedan") {                                  // a sloped cabin with two windows and a pillar
-    for (let y = 2; y < 8; y++) rect(15 - (y - 2), y, 18 + 2 * (y - 2), 1, "B")
-    for (let y = 3; y < 8; y++) { rect(15 - (y - 3), y, 9 + (y - 3), 1, "W"); rect(26, y, 7 + (y - 3), 1, "W") }
-    rect(15, 3, 3, 1, "w"); rect(26, 3, 3, 1, "w")
-  } else {                                                 // the pickup: a cab forward, a bed behind it
-    for (let y = 2; y < 8; y++) rect(27, y, 14 + (y - 2), 1, "B")
-    for (let y = 3; y < 8; y++) rect(29, y, 10 + (y - 3), 1, "W"); rect(29, 3, 3, 1, "w")
-    rect(1, 6, 25, 2, "B"); rect(1, 6, 25, 1, "b")         // the bed's wall
-  }
-  rect(R - 1, 9, 2, 2, "L"); rect(0, 9, 2, 3, "R")          // lights
-  rect(0, 14, 4, 1, "C"); rect(R - 3, 14, 4, 1, "C")        // bumpers
-  for (const wx of wheels) { disc(wx, 14, 4, "D"); disc(wx, 14, 3, "K"); disc(wx, 14, 1, "H") }
-  return g2
-}
-const CARPAL = col => { const n = parseInt(col.slice(1), 16), r = n >> 16, gg = (n >> 8) & 255, b = n & 255, mix = (k, t) => `rgb(${Math.round(r + (t - r) * k)},${Math.round(gg + (t - gg) * k)},${Math.round(b + (t - b) * k)})`
-  return { B: col, b: mix(.35, 255), D: mix(.55, 0), W: "#1b2533", w: "#4c6680", L: "#fff4d6", R: "#ff3b3b", K: "#141414", H: "#9aa0a8", C: "#c3c7ce" } }
-const CARS = {}
-function carSprite(type, col) {                            // drawn once to its own canvas, then reused
-  const key = type + col; if (CARS[key]) return CARS[key]
-  const gr = carGrid(type), pal = CARPAL(col), cv = document.createElement("canvas"); cv.width = gr[0].length; cv.height = gr.length
-  const c2 = cv.getContext("2d"); gr.forEach((row, y) => row.forEach((ch, x) => { if (ch !== ".") { c2.fillStyle = pal[ch]; c2.fillRect(x, y, 1, 1) } }))
-  return (CARS[key] = cv)
-}
-function car(x, y, px, dir, type, col, deco, t) {
-  const sp = carSprite(type, col), w = sp.width * px, h = sp.height * px
-  ctx.save(); ctx.translate(x, y); ctx.scale(dir, 1)       // x is the car's centre, y the road under its tyres
-  ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.beginPath(); ctx.ellipse(0, 0, w * .5, 6, 0, 0, TAU); ctx.fill()
-  ctx.save(); ctx.globalCompositeOperation = "lighter"     // the beam ahead, and the glow of both lamps
-  const bm = ctx.createLinearGradient(w / 2, 0, w / 2 + 240, 0); bm.addColorStop(0, "rgba(255,240,200,.2)"); bm.addColorStop(1, "rgba(255,240,200,0)")
-  ctx.fillStyle = bm; ctx.beginPath(); ctx.moveTo(w / 2, -h + 9 * px); ctx.lineTo(w / 2 + 240, -h + 14 * px); ctx.lineTo(w / 2 + 240, 4); ctx.lineTo(w / 2, -h + 11 * px); ctx.closePath(); ctx.fill()
-  glow(w / 2 - px, -h + 10 * px, 40, "rgba(255,240,200,.45)"); glow(-w / 2 + px, -h + 10.5 * px, 30, "rgba(255,59,59,.4)")
-  ctx.restore()
-  ctx.imageSmoothingEnabled = false; ctx.drawImage(sp, -w / 2, -h + 3 * px, w, h); ctx.imageSmoothingEnabled = true
-  const top = -h + 5 * px
-  if (deco === "antlers") {                                // antlers on the roof, a red nose on the grille
-    const ANT = ["#..#..", "#.#..#", ".##.#.", "..##..", "..#..."]
-    xs.spr(ctx, ANT, { "#": "#8a5a3a" }, -w / 2 + 16 * px, top - 5 * px, px); xs.spr(ctx, ANT, { "#": "#8a5a3a" }, -w / 2 + 26 * px, top - 5 * px, px, { flip: true })
-    ctx.save(); ctx.globalCompositeOperation = "lighter"; glow(w / 2 + px, -h + 12 * px, 18 + 6 * pulseAt(t), "rgba(255,40,40,.7)"); ctx.restore()
-    ctx.fillStyle = "#ff2b2b"; ctx.fillRect(w / 2 - px, -h + 11 * px, 2 * px, 2 * px)
-  }
-  if (deco === "bedtree") {                                // a tree lying in the bed, tied down, its tip over the tailgate
-    const TREE = ["..........GG.....", "......GGGGGGGG...", "..GGGGGGGGGGGGGGT", "GGGGGGGGGGGGGGGGT", "..GGGGgGGGGGGG...", "......GGGgGG....."]
-    xs.spr(ctx, TREE, { G: "#1f7a3e", g: "#2fa356", T: "#6b4528" }, -w / 2 + 3 * px, -h + 3 * px + 6 * px - TREE.length * px + px, px)
-    ctx.fillStyle = "#c9a26b"; ctx.fillRect(-w / 2 + 9 * px, -h + 3 * px + 2 * px, px, 6 * px); ctx.fillRect(-w / 2 + 18 * px, -h + 3 * px + 2 * px, px, 6 * px)
-  }
-  ctx.restore()
-}
-// one lane: each car at the lane's pace, spaced a lane-width apart; the near lane's roadster slot only fills on
-// ROADSTER_PASS. The roadster lifts off partway across, climbs to a cruising height over the street and flies
-// out through the right edge of the frame, not the top
-function lane(Ln, t) {
-  const SPAN = W + 900, m = Ln.cars.length
-  Ln.cars.forEach(([type, col, deco], i) => {
-    const v = (t / T) * Ln.n + i / m, pass = Math.floor(v), u = v - pass, xs0 = -450 + u * SPAN
-    const x = Ln.dir > 0 ? xs0 : W - xs0
-    if (type !== "roadster") return car(x, Ln.y, Ln.px, Ln.dir, type, col, deco, t)
-    if (pass % Ln.n !== ROADSTER_PASS) return
-    const q = clamp((x - 480) / 700), climb = ease(q), alt = 300 * climb, X = x + 520 * q * q - 235
-    const RS = .7, CX = X + 235                                                    // drawn at 70%, so it reads as one more car in the lane
-    ctx.save(); ctx.translate(CX, Ln.y); ctx.scale(RS, RS); ctx.translate(-CX, -Ln.y)
-    roadster(t, { x: X, y: Ln.y - 6, alt: alt / RS, pitch: -.13 * Math.sin(Math.PI * Math.min(1, q * 1.3)), thrust: q > 0 ? Math.min(1, .4 + q * 1.5) : 0, dx: 0, dust: 0 })
+// before each pass: the engine's headlamp lighting the track and the dome's face from the left; after it, the dome's glass band gives one bright chase (bandBoost, in xmasDomeLights)
+function arrivals(t) {
+  for (const [t0] of PASSES) {
+    const u = (t - (t0 - 4)) / 4; if (u < 0 || u > 1) continue
+    ctx.save(); ctx.globalCompositeOperation = "lighter"
+    const a = u * .5, gr = ctx.createLinearGradient(0, 0, 900, 0); gr.addColorStop(0, `rgba(255,236,190,${a.toFixed(3)})`); gr.addColorStop(1, "rgba(255,236,190,0)")
+    ctx.fillStyle = gr; ctx.beginPath(); ctx.moveTo(0, RAIL - 120); ctx.lineTo(900, RAIL - 260); ctx.lineTo(900, RAIL + 30); ctx.lineTo(0, RAIL + 10); ctx.fill()
+    glow(380, 520, 260 * u, `rgba(255,236,190,${(.12 * u).toFixed(3)})`)                                  // its light reaching the dome's face
     ctx.restore()
-    if (q > .03) { ctx.save(); ctx.globalCompositeOperation = "lighter"                   // its sparkle trail
-      for (let k = 0; k < 34; k++) { const a = 1 - k / 34, sx = X + 235 - 235 * .7 + 14 - k * 20, sy = Ln.y - 42 - alt + k * 2.2 + (hash(k, Math.floor(t * 8)) - .5) * 26
-        const c = ["#ffd343", TEAL, "#ffd343", PINK, "#ffd343", ORANGE][k % 6]; ctx.globalAlpha = a * Math.min(1, q * 4); ctx.fillStyle = c; ctx.fillRect(Math.round(sx / 4) * 4, Math.round(sy / 4) * 4, 4, 4) }
-      ctx.restore() }
-  })
-}
-// Christmas: the street in colour, so it reads at a glance: asphalt between two kerbs, the centre line dashed,
-// streetlamps on the far kerb throwing warm pools on the road; and a sidewalk across the front of the frame
-const RT = ROAD_TOP * CELL, RB = ROAD_BOT * CELL, MID = (RT + RB) / 2
-function xmasStreet(t) {
-  ctx.fillStyle = "rgba(14,15,19,.94)"; ctx.fillRect(0, RT, W, RB - RT)
-  ctx.fillStyle = "#4a4b52"; ctx.fillRect(0, RT - 4, W, 6); ctx.fillRect(0, RB - 2, W, 6)                // the kerbs
-  ctx.fillStyle = "rgba(255,255,255,.08)"; ctx.fillRect(0, RT + 8, W, 2); ctx.fillRect(0, RB - 10, W, 2)  // the lane edges
-  ctx.fillStyle = "#e8d48a"; for (let x = 20; x < W; x += 140) ctx.fillRect(x, MID - 3, 70, 6)            // the centre line, held still
-  for (let x = 200; x < W; x += 480) {                                                                       // the streetlamps
-    ctx.fillStyle = "#3a3b42"; ctx.fillRect(x - 3, RT - 150, 6, 150); ctx.fillRect(x - 3, RT - 150, 40, 5)
-    ctx.fillStyle = "#fff1c8"; ctx.fillRect(x + 26, RT - 146, 14, 5)
-    lampLight(x + 33, RT - 140, x, RT + 70)
+
   }
-  // the sidewalk across the front: a concrete strip with its joints, then the dark verge
-  ctx.fillStyle = "#1d1e23"; ctx.fillRect(0, RB + 4, W, 70); ctx.fillStyle = "#26272d"; ctx.fillRect(0, RB + 4, W, 4)
-  ctx.fillStyle = "rgba(0,0,0,.35)"; for (let x = 60; x < W; x += 120) ctx.fillRect(x, RB + 8, 2, 66)
-}
-function lampLight(hx, hy, px, py) {                       // a lamp's glow at its head and its warm pool on the road
-  ctx.save(); ctx.globalCompositeOperation = "lighter"
-  glow(hx, hy, 30, "rgba(255,230,170,.55)")
-  const pool = ctx.createRadialGradient(px + 30, py, 0, px + 30, py, 200); pool.addColorStop(0, "rgba(255,210,140,.16)"); pool.addColorStop(1, "rgba(255,210,140,0)")
-  ctx.fillStyle = pool; ctx.beginPath(); ctx.ellipse(px + 30, py, 220, 70, 0, 0, TAU); ctx.fill(); ctx.restore()
-}
-// once a loop the cast walks the sidewalk toward the dome's doors, slowly: the penguin, two elves, an agent with a gift
-const WALK = { t0: 64, dur: 44, y: 1004 }
-const SKINS2 = [["#f2cfae", "#d9ab86"], ["#c2875a", "#a06c44"], ["#6e4428", "#55331e"]]
-function walkers(t) {
-  const u = (t - WALK.t0) / WALK.dur; if (u < 0 || u > 1) return
-  const lead = lerp(-200, W + 400, u), gait = TAU * BPM / 60 * (t - OFFSET), step = i => Math.floor(gait / Math.PI + i + 1000) % 2
-  ;[[0, "penguin"], [-120, "elf", PINK, 1], [-230, "agent"], [-340, "elf", TEAL, 2]].forEach(([dx, kind, c, sk], i) => {
-    const x = lead + dx, bob = Math.abs(Math.sin(gait + i)) * 3
-    if (x < -120 || x > W + 120) return
-    ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.beginPath(); ctx.ellipse(x, WALK.y, 26, 5, 0, 0, TAU); ctx.fill()
-    if (kind === "penguin" && PENGUIN.complete) { const h = 96, w = h * PENGUIN.width / PENGUIN.height; ctx.imageSmoothingEnabled = false; ctx.drawImage(PENGUIN, x - w / 2, WALK.y - h - bob, w, h); ctx.imageSmoothingEnabled = true }
-    if (kind === "elf") { const px = 5, map = step(i) ? xs.ELF_STEP : xs.ELF, [w, h] = xs.size(map, px); xs.spr(ctx, map, { ...xs.PAL, E: c, S: SKINS2[sk][0], s: SKINS2[sk][1] }, x - w / 2, WALK.y - h - bob, px) }
-    if (kind === "agent") { drawPlush(ctx, { x, y: WALK.y, s: .8, tint: TEAL, number: "", t, stride: gait + i, run: .5, look: 6, mouth: .4, seed: 9, hold: 1 })
-      const [gw, gh] = xs.size(xs.GIFT, 3); xs.spr(ctx, xs.GIFT, { ...xs.PAL, ...xs.WRAPS[0] }, x + 4 - gw / 2, WALK.y - 66 - gh / 2, 3) }
-  })
-}
-// Santa's sleigh and four reindeer, high across the sky once a loop
-function paceSleigh(t) {
-  const dur = 18, t0 = T * .1, u = (t - t0) / dur; if (u < 0 || u > 1) return
-  const x = lerp(-500, W + 500, u), y = 250 + Math.sin(u * TAU * 2) * 14, px = 4
-  for (let k = 4; k >= 1; k--) { const [w, h] = xs.size(xs.DEER, px), leap = Math.floor(t * 6 + k) % 2, rx = x + 120 + k * 80
-    ctx.save(); ctx.globalCompositeOperation = "lighter"; glow(rx + w * .4, y - h * .55, 10, fm_rgba(xs.NOSE[k % 3], .6)); ctx.restore()
-    xs.spr(ctx, leap ? xs.DEER_LEAP : xs.DEER, { ...xs.PAL, N: xs.NOSE[k % 3] }, rx - w / 2, y - h + (leap ? -2 * px : 0), px) }
-  const [sw, sh] = xs.size(xs.SLEIGH, px)
-  xs.spr(ctx, xs.SACK, xs.PAL, x - sw / 2 - 2 * px, y - sh - 7 * px, px); xs.spr(ctx, xs.SANTA_SEATED, xs.PAL, x - sw / 2 + 10 * px, y - sh - 13 * px, px); xs.spr(ctx, xs.SLEIGH, xs.PAL, x - sw / 2, y - sh, px)
-  ctx.save(); ctx.globalCompositeOperation = "lighter"
-  for (let k = 1; k < 26; k++) { const sx = x - sw / 2 - k * 14, sy = y - 20 + Math.sin(k + t * 9) * 8; ctx.fillStyle = [ "#ffd343", TEAL, PINK, ORANGE][k % 4]; ctx.globalAlpha = 1 - k / 26; ctx.fillRect(sx, sy, 4, 4) }
-  ctx.restore()
 }
 const fm_rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})` }
-// its sparkle trail in the air, like the sleigh's: drawn in screen space behind the roadster
-function xmasTrail(t) {
-  const f = flight(t); if (f.alt < 30) return
-  const x0 = 690 + f.dx, base = 878 - f.alt
+const bandBoost = t => { let b = 0; for (const [, t1] of PASSES) { const u = (t - t1) / 3; if (u >= 0 && u <= 1) b = Math.max(b, Math.sin(Math.PI * u)) } return b }
+// the cars' light on the ballast as they pass
+function trainGlow(t) {
+  const h = EXPRESS.head(t); if (!h) return
+  const x0 = Math.max(0, h.hx - h.len), x1 = Math.min(W, h.hx)
   ctx.save(); ctx.globalCompositeOperation = "lighter"
-  for (let k = 0; k < 40; k++) {
-    const a = (1 - k / 40) * Math.min(1, f.alt / 200), sx = x0 + 10 - k * 18 - hash(k, Math.floor(t * 8)) * 10, sy = base - 40 + (hash(Math.floor(t * 8), k) - .5) * 40 + k * 1.5
-    const c = ["#ffd343", TEAL, "#ffd343", PINK, "#ffd343", ORANGE][k % 6]
-    glow(sx, sy, 8, c + "66"); ctx.fillStyle = c; ctx.globalAlpha = a; ctx.fillRect(Math.round(sx / 4) * 4, Math.round(sy / 4) * 4, 4, 4); ctx.globalAlpha = 1
-  }
-  ctx.restore()
+  const gr = ctx.createLinearGradient(0, RAIL + 4, 0, RAIL + 60); gr.addColorStop(0, "rgba(255,210,140,.16)"); gr.addColorStop(1, "rgba(255,210,140,0)")
+  ctx.fillStyle = gr; ctx.fillRect(x0, RAIL + 4, x1 - x0, 56); ctx.restore()
 }
+// the downtown towers on the right pushed back, so the dome stays the subject
+function dimSkyline() { ctx.fillStyle = "rgba(12,12,12,.55)"; ctx.fillRect(1600, 260, W - 1600, PLAZA * CELL - 260) }
 // pixel snow: the desk's six-armed flake and specks, seamless over the loop
 const XFLAKE = ["...#...", "#..#..#", ".#.#.#.", "..###..", "#######", "..###..", ".#.#.#.", "#..#..#", "...#..."]
 const XFLAKES = Array.from({ length: 70 }, (_, i) => { const kind = i % 10 < 6 ? 0 : i % 10 < 9 ? 1 : 2
@@ -491,11 +421,24 @@ function xmasDomeLights(t) {
   ctx.save(); ctx.translate(-XSHIFT * CELL, 0)                        // the dome moved left with the backdrop
   const XC = ["#e8323c", "#2fd06a", TEAL, PINK, ORANGE, "#ffd343"], step = Math.floor(((t - OFFSET) * BPM / 60 * 2) % 600 + 600)   // kept positive: before the first beat t - OFFSET is negative
   ctx.save(); ctx.globalCompositeOperation = "lighter"
+  const boost = bandBoost(t)
+  { ctx.save(); ctx.translate((ROOF_L + ROOF_R) / 2 * CELL, PLAZA * CELL + 30); ctx.scale(1, .2)          // the dome's light spilling onto the plaza
+    const sp = ctx.createRadialGradient(0, 0, 0, 0, 0, 700); sp.addColorStop(0, `rgba(255,206,150,${(.16 + .08 * boost).toFixed(3)})`); sp.addColorStop(1, "rgba(255,206,150,0)")
+    ctx.fillStyle = sp; ctx.beginPath(); ctx.arc(0, 0, 700, 0, TAU); ctx.fill(); ctx.restore() }
+  { ctx.save(); ctx.translate((ROOF_L + ROOF_R) / 2 * CELL, (ROOF_Y + 1) * CELL); ctx.scale(1, .16)      // a soft warm wash on the roof
+    const w = ctx.createRadialGradient(0, 0, 0, 0, 0, 640); w.addColorStop(0, "rgba(255,214,160,.14)"); w.addColorStop(1, "rgba(255,214,160,0)")
+    ctx.fillStyle = w; ctx.beginPath(); ctx.arc(0, 0, 640, 0, TAU); ctx.fill(); ctx.restore() }
+  for (const [x, top, foot] of MASTS) {                                                  // bulbs strung along the masts' cables
+    const front = foot === PLAZA, toward = x < 86 ? 1 : -1
+    for (const k of [1, 2, 3]) { const ex = x + toward * k * (front ? 7 : 6), ey = FACE_TOP - (front ? 2 : 3) + (front ? 0 : k * .4)
+      for (let q = 1; q < 6; q++) { const u = q / 6, bx = (x + (ex - x) * u) * CELL + 6, byy = (top + 1 + (ey - top - 1) * u) * CELL + 6, cc = XC[(q + k) % XC.length]
+        glow(bx, byy, 8, cc + "55"); ctx.fillStyle = cc; ctx.fillRect(bx - 2, byy - 2, 4, 4) } }
+  }
   const bx0 = ROOF_L * CELL + 24, bw = (ROOF_R - ROOF_L) * CELL - 48, by = (FACE_TOP + 3) * CELL
   for (let i = 0, n = 26; i < n; i++) {
     const c = XC[(i + step) % XC.length]
     ctx.fillStyle = c + "b0"; ctx.fillRect(bx0 + i * bw / n + 2, by + 2, bw / n - 6, 32)            // the glass band: clean, bright panes chasing on the beat
-    glow(bx0 + (i + .5) * bw / n, by + 18, 30, c + "30")
+    glow(bx0 + (i + .5) * bw / n, by + 18, 30 + 30 * boost, c + (boost > .3 ? "60" : "30"))
   }
   for (let x = ROOF_L * CELL + 10, i = 0; x < ROOF_R * CELL - 10; x += 26, i++) {     // a string along the roof's edge
     const y = ROOF_Y * CELL - 4 + Math.sin(Math.PI * (x - ROOF_L * CELL) / ((ROOF_R - ROOF_L) * CELL)) * -40
@@ -540,7 +483,7 @@ function render(t) {
     ctx.fillStyle = `rgba(235,235,235,${(.25 + v * .75).toFixed(2)})`
     ctx.fillText(ch, x * CELL + CELL / 2, y * CELL + CELL / 2 + 1)
   }
-  if (XMAS) { xmasDomeLights(t); xmasStreet(t); lane(FAR, t); lane(NEAR, t); walkers(t) } else { domeLights(t); roadster(t) }
+  if (XMAS) { dimSkyline(); xmasDomeLights(t); arrivals(t); ballast(); trainGlow(t); EXPRESS.track(); EXPRESS.draw(t); crossing(t); waiters(t); gateArm(t) } else { domeLights(t); roadster(t) }
   if (XMAS) xmasSnow(t)
 
   // footer: who this is, and the music credit
@@ -557,7 +500,7 @@ function render(t) {
 }
 
 window.render = render
-window.ready = Promise.all([document.fonts.load('700 20px "Geist Mono"'), document.fonts.load('500 20px "Geist"'), loadIcons(),
+window.ready = Promise.all([document.fonts.load('700 20px "Geist Mono"'), document.fonts.load('500 20px "Geist"'), loadIcons(), XMAS ? EXPRESS.ready : 0,
   ...[PENGUIN, PYSA].map(i => i.complete ? 0 : new Promise(r => { i.onload = r; i.onerror = r }))])
   .then(() => { paint(0); return new Promise(r => setTimeout(r, 300)) })
 window.ready.then(() => {
