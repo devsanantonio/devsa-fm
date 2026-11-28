@@ -28,7 +28,7 @@ window.makeRioBoat = function ({ ALT, ROCK, LT }) {
       if (p[i + 3] >= 20) { p[i] = cr; p[i + 1] = cg; p[i + 2] = cb } }
     x.putImageData(d, 0, 0); CUT = c; return CUT
   }
-  function barge(ctx, t) {
+  function barge(ctx, t, dir = 1) {                         // dir: 1 heading right (the wake trails left), -1 heading left
     const x0 = 470, x1 = 1110, top = 800 + ROCK(t), panelH = 92, r = 46
     const y1 = top + panelH, hullH = 40
     // hull: dark, rounded ends, with the black rubber bumper line
@@ -73,7 +73,7 @@ window.makeRioBoat = function ({ ALT, ROCK, LT }) {
     // the wake behind it
     for (let k = 0; k < 4; k++) { const u = ((t / LT) * 8 + k / 4) % 1
       ctx.fillStyle = `rgba(235,235,235,${(.45 * (1 - u)).toFixed(2)})`
-      ctx.fillRect(x0 - 20 - u * 220, y1 + 24 + (k % 2) * 10, 30 + u * 40, 5) }
+      ctx.fillRect(dir > 0 ? x0 - 20 - u * 220 : x1 - 10 + u * 220, y1 + 24 + (k % 2) * 10, 30 + u * 40, 5) }
   }
   
   function bulbs(ctx, t) {

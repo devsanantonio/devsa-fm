@@ -21,8 +21,8 @@
 #   room                 the ASCII room                         music-tejano/ (DURATION=n for longer; runs faster than real time)
 #
 #   xmas                 the Christmas FM edition (from the day after Thanksgiving): popping into downtown spaces: the
-#                        DEVSA tree, the bus ride, the gift station at Market Square, movie night at Mission Marquee Plaza, the Express passing the Alamodome,
-#                        the band at the Arneson River Theatre, San Fernando's show, the Rand Building on Houston Street, the taco truck, the New Year finale. Each synced to a track in music-xmas/ (ElevenLabs, see LICENSES.txt).
+#                        DEVSA tree, movie night at Mission Marquee Plaza, the bus ride downtown, the Rand Building on Houston Street, the Express
+#                        passing the Alamodome, the band at the Arneson River Theatre, San Fernando's show, the taco truck, the New Year finale. Each synced to a track in music-xmas/ (ElevenLabs, see LICENSES.txt).
 #   mix                  the show: commute-night, fish, court, taco, rand, paseo, cathedral, riverwalk. Each
 #                        scene is synced to one song (the table in scene_env) and changes when the
 #                        song ends, so a cut always lands on a song change.
@@ -44,7 +44,7 @@ _MUSIC="${MUSIC_DIR:-}"
 [ -f config.env ] && source config.env
 DURATION="${_DUR:-${DURATION:-9000}}"     # 2.5 hours
 MIX_ORDER=(commute-night fish court taco rand paseo cathedral riverwalk)
-XMAS_ORDER=(xmas-tree commute-xmas paseo-xmas xmas-marquee dome-xmas xmas-arneson cathedral-xmas rand-xmas taco-xmas xmas-finale)   # opens and closes on the two DEVSA TV desk graphics (ep1 tree, ep2 fireworks)
+XMAS_ORDER=(xmas-tree xmas-marquee commute-xmas rand-xmas dome-xmas xmas-arneson cathedral-xmas taco-xmas xmas-finale)   # opens and closes on the two DEVSA TV desk graphics (ep1 tree, ep2 fireworks)
                                                                                            # the plaza, the truck, then fireworks   # an evening: calm, calm, the game, a breather, the concert,
                                                                             # then the walk downtown: Market Square, San Fernando, the river
 
@@ -90,12 +90,12 @@ scene_env() {
   local xsong=""
   case "$name" in
     commute-xmas)   SCENE=commute.html;   SCENE_QUERY=xmas; xsong=tamal ;;
-    xmas-tree)      SCENE=xmas-tree.html;    xsong=tree ;;
-    xmas-marquee)   SCENE=xmas-marquee.html; xsong=tree ;;   # movie night at Mission Marquee Plaza; devsa.community's hero photos on its screen
+    xmas-tree)      SCENE=xmas-tree.html;    xsong=glow ;;   # the round opens on Christmas Tree Glow: "Los Peces en el Río" in lofi
+    xmas-marquee)   SCENE=xmas-marquee.html; xsong=tree ;;   # movie night at Mission Marquee Plaza: the countdown, five trailers, the outro
     riverwalk-xmas) SCENE=riverwalk.html; SCENE_QUERY=xmas; xsong=nocturne ;;
     cathedral-xmas) SCENE=cathedral.html; SCENE_QUERY=xmas; xsong=mistletoe ;;
     paseo-xmas)     SCENE=paseo.html;     SCENE_QUERY=xmas; xsong=mistletoe ;;   # the gift station at Market Square: wrap, check, ship; Santa comes for the sleigh
-    rand-xmas)      SCENE=rand.html;      SCENE_QUERY=xmas; xsong=cartridge ;;   # the Rand Building on Houston Street, its windows in a holiday show, the third floor lit for a meetup
+    rand-xmas)      SCENE=rand.html;      SCENE_QUERY=xmas; xsong=mistletoe ;;   # Christmas on Houston Street: the Rand, the third floor lit for a meetup
     xmas-arneson)   SCENE=xmas-arneson.html; xsong=nocturne ;;   # the band at the Arneson River Theatre, La Villita
     dome-xmas)      SCENE=dome.html;      SCENE_QUERY=xmas; xsong=cartridge ;;   # the Express passing the dome: the train's track, its bell on the beat
     taco-xmas)      SCENE=taco.html;      SCENE_QUERY=xmas; xsong=tamal ;;
@@ -106,6 +106,7 @@ scene_env() {
     cartridge) SYNC=beats-xmas-christmas-cartridge-glow.json;   SYNC_AUDIO="music-xmas/Christmas Cartridge Glow.wav" ;;
     mistletoe) SYNC=beats-xmas-midnight-mistletoe-cumbia.json;  SYNC_AUDIO="music-xmas/Midnight Mistletoe Cumbia.wav" ;;
     tree)      SYNC=beats-xmas-by-the-tree-at-midnight.json;    SYNC_AUDIO="music-xmas/By the Tree at Midnight.wav" ;;
+    glow)      SYNC=beats-xmas-christmas-tree-glow.json;        SYNC_AUDIO="music-xmas/Christmas Tree Glow.wav" ;;
     spark)     SYNC=beats-xmas-midnight-spark.json;             SYNC_AUDIO="music-xmas/Midnight Spark.wav" ;;   # trimmed to 2:00
     tamal)     SYNC=beats-xmas-midnight-tamal-loop.json;        SYNC_AUDIO="music-xmas/Midnight Tamal Loop.wav" ;;   # trimmed to 2:00
   esac

@@ -7,7 +7,7 @@ const puppeteer = require(path.join(__dirname, '..', 'node_modules', 'puppeteer-
   for (const v of (process.argv[2] || 'abcdef').split('')) {
     await pg.goto('file://' + path.join(__dirname, 'thumb.html') + '?' + v, { waitUntil: 'load' })
     await pg.evaluate(() => document.fonts.ready)
-    await pg.screenshot({ path: path.join(__dirname, `${{ a: 'devsa-fm-thumbnail-a', b: 'devsa-fm-thumbnail-b', c: 'devsa-fm-thumbnail-radio', d: 'devsa-fm-thumbnail-radio-mosaic', e: 'devsa-fm-thumbnail-alt', f: 'devsa-fm-thumbnail-night-mix', g: 'devsa-fm-thumbnail-christmas' }[v]}.png`) })
+    await pg.screenshot({ path: path.join(__dirname, `${{ a: 'devsa-fm-thumbnail-a', b: 'devsa-fm-thumbnail-b', c: 'devsa-fm-thumbnail-radio', d: 'devsa-fm-thumbnail-radio-mosaic', e: 'devsa-fm-thumbnail-alt', f: 'devsa-fm-thumbnail-night-mix', g: 'devsa-fm-thumbnail-christmas', h: 'devsa-fm-thumbnail-christmas-cathedral', i: 'devsa-fm-thumbnail-christmas-lofi', j: 'devsa-fm-thumbnail-christmas-arneson' }[v]}.png`) })
   }
   await b.close()
 })()

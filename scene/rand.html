@@ -18,6 +18,9 @@
   cornice, two flagpoles), not traced from any photo.
   1920x1080, a seamless T-second loop: render(t) draws a frame.
 
+  At Christmas, DEVSA's window sticker is on the main doors' glass and a sidewalk sign by the door says there's a
+  meetup on the 3rd floor tonight, with Alamo Python's mark.
+
   ?xmas, the Christmas edition: Christmas on Houston Street. No concert (no riser, speakers, stage lights, mascot or
   crowd) and no light show in the windows (the cathedral has one): a still December night, a few windows lit warm.
   The third floor is lit for a meetup: heads
@@ -310,6 +313,25 @@ function wreath(x, y, R, t) {
   ctx.beginPath(); ctx.moveTo(x + 3, by); ctx.lineTo(x + R * .35, by + R * .7); ctx.lineTo(x + R * .18, by + R * .62); ctx.lineTo(x, by + 2); ctx.fill()
   ctx.fillStyle = "#e8323c"; ctx.fillRect(x - p, by - p, 2 * p, 2 * p)
 }
+// DEVSA, quietly: its window sticker on the glass of the main doors, and a sidewalk sign by the door for tonight's
+// meetup upstairs, with Alamo Python's mark (DEVSA designed it; Alamo Python is a partner)
+const STICKER = new Image(); STICKER.src = "devsa-window-sticker.png"
+const AP = new Image(); AP.src = "alamo-python-dark.png"
+function devsaTouches(t) {
+  const doorX = (BX0 + 4 * BW8) * CELL, sy = (CANOPY + 2) * CELL
+  if (STICKER.complete && STICKER.naturalWidth) { const w = 30, h = w * 320 / 384; ctx.globalAlpha = .92; ctx.drawImage(STICKER, doorX + 6, sy + 40, w, h); ctx.globalAlpha = 1 }   // on the right-hand door's glass
+  const x = doorX + 150, base = BASE * CELL + 36, w = 112, h = 150                    // the A-frame sign on the sidewalk
+  ctx.fillStyle = "rgba(0,0,0,.35)"; ctx.beginPath(); ctx.ellipse(x, base + 2, w * .6, 8, 0, 0, TAU); ctx.fill()
+  ctx.strokeStyle = "#6b4a2e"; ctx.lineWidth = 6; ctx.beginPath(); ctx.moveTo(x - w / 2 + 6, base - h + 4); ctx.lineTo(x - w / 2 - 6, base); ctx.moveTo(x + w / 2 - 6, base - h + 4); ctx.lineTo(x + w / 2 + 6, base); ctx.stroke()
+  ctx.fillStyle = "#6b4a2e"; ctx.fillRect(x - w / 2 - 2, base - h - 4, w + 4, h - 20)
+  ctx.fillStyle = "#1f2a26"; ctx.fillRect(x - w / 2 + 4, base - h + 2, w - 8, h - 32)                // the chalkboard
+  ctx.save(); ctx.translate(x, base - h + 40); ctx.rotate(-.05)                    // a printed flyer taped on, the mark in its own black
+  ctx.fillStyle = "#f4efe2"; ctx.fillRect(-34, -32, 68, 64); ctx.fillStyle = "rgba(230,220,180,.8)"; ctx.fillRect(-12, -36, 24, 8)
+  if (AP.complete && AP.naturalWidth) ctx.drawImage(AP, -26, -26, 52, 52)
+  ctx.restore()
+  ctx.fillStyle = "rgba(240,236,224,.92)"; ctx.font = '700 12px "Geist Mono"'; ctx.textAlign = "center"; ctx.textBaseline = "middle"
+  ctx.fillText("MEETUP TONIGHT", x, base - h + 80); ctx.fillText("3RD FLOOR ↑", x, base - h + 98)
+}
 function xmasFacade(t, beat) {
   const px = ([x, y, w, h]) => [x * CELL, y * CELL, w * CELL, h * CELL]
   // the few windows lit late, warm and still
@@ -547,7 +569,7 @@ function render(t) {
     ctx.fillStyle = tc ? `rgba(${tc[0]},${tc[1]},${tc[2]},${(.45 + v * .55).toFixed(2)})` : `rgba(235,235,235,${(.25 + v * .75).toFixed(2)})`
     ctx.fillText(ch, x * CELL + CELL / 2, y * CELL + CELL / 2 + 1)
   }
-  if (XMAS) { neighbours(t); xmasFacade(t, beat); windowWave(t); wetStreet(t); farWalkers(t); xmasStreetLights(t, beat); trees(t); randClock(t); xmasCast(t, beat); xmasSnow(t); xmasFooter(t); return }
+  if (XMAS) { neighbours(t); xmasFacade(t, beat); devsaTouches(t); windowWave(t); wetStreet(t); farWalkers(t); xmasStreetLights(t, beat); trees(t); randClock(t); xmasCast(t, beat); xmasSnow(t); xmasFooter(t); return }
   stageLights(t, beat)
   performers(t, beat)
   phones(t)
@@ -566,7 +588,7 @@ function render(t) {
 }
 
 window.render = render
-window.ready = Promise.all([document.fonts.load('700 20px "Geist Mono"'), document.fonts.load('500 20px "Geist"'),
+window.ready = Promise.all([document.fonts.load('700 20px "Geist Mono"'), document.fonts.load('500 20px "Geist"'), ...[STICKER, AP].map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r })),
   ...[PYSA].map(i => i.complete ? 0 : new Promise(r => { i.onload = r; i.onerror = r }))])
 window.ready.then(() => {
   if (new URLSearchParams(location.search).has("still")) return render(8)

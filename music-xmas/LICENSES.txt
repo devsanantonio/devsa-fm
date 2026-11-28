@@ -5,3 +5,6 @@ By the Tree at Midnight, Midnight Tamal Loop: generated with ElevenLabs Music on
 for Speech and Music), 2026-11-25, downloaded as WAV. Midnight Tamal Loop trimmed from 2:30 to 2:00 with a 4 s fade-out.
 Midnight Spark: generated with ElevenLabs Music on the Starter plan (Commercial License for Speech and Music),
 2026-11-25, downloaded as MP3, converted to WAV and trimmed to 2:00 with a 4 s fade-out.
+Christmas Tree Glow: generated with ElevenLabs Music on the Starter plan (Commercial License for Speech and Music),
+2026-11-27, downloaded as WAV, 2:00, used as is. A lofi arrangement of the traditional villancico "Los Peces en el Río"
+(public domain).

@@ -29,15 +29,14 @@
   from folding chairs on the plaza, backs to us; Linux San Antonio's penguin rides by on a bicycle.
   1920x1080; the loop is fm.T long (synced to "Smooth Tech-jano" on stream).
 
-  ?xmas: the Christmas show. The same mapping (the stone lit, doors and belfry dark), with Christmas films in the
-  arch: the DEVSA mark, luminarias, a nochebuena, papel picado, ornaments, a DEVSA terminal (proj/xmas-*/, from
-  proj-xmas/films.html). Each film reaches the bell towers in a simpler form: luminarias climbing them, papel
-  picado strung across them, ornaments hanging from their cornices, nochebuenas blooming round the oculi, a
-  terminal's lines scrolling up them. Between films, one soft wipe: a bright line sweeping down the facade with
-  the new film's light behind it (the year-round show keeps its hatched sweeps). On the plaza a loose crowd stands
-  watching, seen from behind, the cast among them, a few holding up phones whose screens glow as they record; an
-  elf rides a reindeer across behind them; luminarias along the steps; pixel snow. No sleigh: the projection is
-  this scene's show. Footer: the DEVSA FM radio.
+  ?xmas: the Christmas show. The same mapping (the stone lit, doors and belfry dark), the building playing in red,
+  green, gold and warm white rather than the tab colours. The DEVSA mark opens it; luminarias and a nochebuena play in
+  the arch (proj/xmas-*/, from proj-xmas/films.html), echoed on the bell towers; then papel picado strung across the
+  whole facade from tower to tower, ornaments hung from the cornice across the whole front, and the finale, la
+  estrella: the seven-point star rises up the arch to the rose window, its rays sweep across both towers until the
+  whole building is lit gold at once, and it settles into the DEVSA mark, so the loop ends as it began. Between films,
+  one soft wipe. On the plaza the cast stands watching, elves and agents seen from behind, lit by the show; an elf
+  rides a reindeer across behind them; luminarias along the steps; pixel snow. Footer: the DEVSA FM radio.
 -->
 <canvas id="c" width="1920" height="1080"></canvas>
 <script src="plush.js"></script>
@@ -245,11 +244,13 @@ const LAVENDER = "#c4b5fd"
 // DEVSA's colours stay on the building: the left tower teal, the right orange, the gable pink.
 const BUTTRESSES = [[250, 340], [610, 690], [1230, 1310], [1580, 1670], [750, 830], [1090, 1170]]
   .map(([a, b]) => [fx(a), fx(b)])
+// Christmas: the building plays in red, green, gold and warm white, not the tab colours
+const XR = "#e8323c", XG = "#2fb85a", XGOLD = "#ffcf4a"
 function stonePatterns(sec, k) {                          // k: 0..1, how hard the building is playing
   const beat = fm.pulseAt(sec)
   p.save(); p.clip(FACADE)
   // the tower faces: a soft field of their colour, then the coursing as a grid, light climbing it
-  for (const [x0, x1, col] of [[LT0, LT1, TEAL], [RT0, RT1, ORANGE]]) {
+  for (const [x0, x1, col] of [[LT0, LT1, XMAS ? XG : TEAL], [RT0, RT1, XMAS ? XR : ORANGE]]) {
     p.globalAlpha = (.16 + .1 * beat) * (.6 + .4 * k); p.fillStyle = col; p.fillRect(x0, TOP - 40, x1 - x0, GROUND - TOP + 40)
     p.strokeStyle = col; p.lineWidth = 2
     for (let y = Math.ceil((TOP - 40) / 24) * 24, row = 0; y < GROUND; y += 24, row++) {
@@ -259,7 +260,7 @@ function stonePatterns(sec, k) {                          // k: 0..1, how hard t
     }
   }
   // the gable, pink
-  p.globalAlpha = (.22 + .12 * beat) * (.6 + .4 * k); p.fillStyle = PINK
+  p.globalAlpha = (.22 + .12 * beat) * (.6 + .4 * k); p.fillStyle = XMAS ? XR : PINK
   p.beginPath(); p.moveTo(LT1, GROUND); p.lineTo(LT1, SHOULDER); p.lineTo(960, PEAK); p.lineTo(RT0, SHOULDER); p.lineTo(RT0, GROUND); p.fill()
   // chevrons running down every buttress
   p.lineWidth = 5; p.lineJoin = "miter"
@@ -267,17 +268,17 @@ function stonePatterns(sec, k) {                          // k: 0..1, how hard t
     const top = fy(760), mid = (bx0 + bx1) / 2, off = (sec * 46) % 28
     for (let y = top - 28 + off, i = 0; y < GROUND; y += 28, i++) {
       const band = Math.floor((y - off) / 28 + 999) % 3
-      p.globalAlpha = (.35 + .45 * k) * (.7 + .3 * beat); p.strokeStyle = [PINK, ORANGE, TEAL][band]
+      p.globalAlpha = (.35 + .45 * k) * (.7 + .3 * beat); p.strokeStyle = (XMAS ? [XR, XGOLD, XG] : [PINK, ORANGE, TEAL])[band]
       p.beginPath(); p.moveTo(bx0, y); p.lineTo(mid, y + 13); p.lineTo(bx1, y); p.stroke()
     }
   }
   // the rose window, turning slowly, flaring on the beat; the oculi answer it off the beat
   const [rx, ry, rr] = ROSE, rot = sec * .35
-  p.globalAlpha = .35 + .65 * beat; p.strokeStyle = beat > .5 ? PINK : "#f4efe6"; p.lineWidth = 6
+  p.globalAlpha = .35 + .65 * beat; p.strokeStyle = beat > .5 ? (XMAS ? XGOLD : PINK) : "#f4efe6"; p.lineWidth = 6
   p.beginPath(); p.arc(rx, ry, rr, 0, TAU); p.stroke(); p.beginPath(); p.arc(rx, ry, rr * .3, 0, TAU); p.stroke()
   for (let i = 0; i < 8; i++) { const a = rot + i / 8 * TAU; p.beginPath(); p.moveTo(rx + Math.cos(a) * rr * .3, ry + Math.sin(a) * rr * .3); p.lineTo(rx + Math.cos(a) * rr, ry + Math.sin(a) * rr); p.stroke() }
   const off = fm.pulseAt(sec + .3)
-  OCULI.forEach(([ox, oy], i) => { p.globalAlpha = .3 + .6 * off; p.strokeStyle = i ? ORANGE : TEAL; p.lineWidth = 7; p.beginPath(); p.arc(ox, oy, OCULUS_R, 0, TAU); p.stroke() })
+  OCULI.forEach(([ox, oy], i) => { p.globalAlpha = .3 + .6 * off; p.strokeStyle = XMAS ? (i ? XR : XG) : (i ? ORANGE : TEAL); p.lineWidth = 7; p.beginPath(); p.arc(ox, oy, OCULUS_R, 0, TAU); p.stroke() })
   p.restore()
 }
 
@@ -350,13 +351,65 @@ const FILMS = [
   } },
 ]
 // --- ?xmas: the Christmas segments ------------------------------------------------------------------
-const XFILMS = [                                        // each in the arch, like the year-round films
+// --- the full-facade films ---------------------------------------------------------------------------
+const XPAL = ["#e8323c", "#2fb85a", "#ffcf4a", "#f4efe6", "#e8323c", "#2fb85a"]
+function papelFacade(u, sec) {                            // strings of papel picado from tower to tower at three heights, a breeze along them
+  p.save(); p.clip(FACADE)
+  ;[[fy(560), 40], [fy(980), 60], [fy(1400), 50]].forEach(([y0, sag], k) => {
+    const n = 14, at = x => y0 + sag * 4 * ((x - LT0) / (RT1 - LT0)) * (1 - (x - LT0) / (RT1 - LT0)), grow = clamp01(u * 4 - k * .4)
+    p.strokeStyle = "rgba(244,239,230,.6)"; p.lineWidth = 2; p.beginPath(); for (let x = LT0; x <= RT1; x += 10) x === LT0 ? p.moveTo(x, at(x)) : p.lineTo(x, at(x)); p.stroke()
+    for (let f = 0; f < n * grow; f++) {
+      const x = LT0 + (f + .5) * (RT1 - LT0) / n, y = at(x), fw = (RT1 - LT0) / n - 10, fh = fw * 1.2, sw = Math.sin(sec * 1.6 - f * .45 + k) * .06
+      p.save(); p.translate(x, y); p.transform(1, 0, sw, 1, 0, 0); p.fillStyle = XPAL[(f + k * 2) % XPAL.length]
+      p.beginPath(); p.moveTo(-fw / 2, 0); p.lineTo(fw / 2, 0); p.lineTo(fw / 2, fh * .86); for (let z = 6; z >= 0; z--) p.lineTo(-fw / 2 + fw * z / 6, fh * (z % 2 ? .86 : 1)); p.closePath(); p.fill()
+      p.fillStyle = "#000"; const r = fw * .2, cy = fh * .45                                         // a star cut through
+      p.beginPath(); for (let q = 0; q < 14; q++) { const a = -Math.PI / 2 + q * Math.PI / 7, rr = q % 2 ? r * .45 : r; p.lineTo(Math.cos(a) * rr, cy + Math.sin(a) * rr) } p.fill()
+      for (let q = 0; q < 5; q++) p.fillRect(-fw * .36 + q * fw * .18 - 2, fh * .08, 4, 4)
+      p.restore()
+    }
+  })
+  p.restore()
+}
+function ornamentsFacade(u, sec) {                        // baubles hung on strings from the cornice across the whole front, swinging
+  p.save(); p.clip(FACADE)
+  const N = 16
+  for (let k = 0; k < N; k++) {
+    const ax = LT0 + (k + .5) * (RT1 - LT0) / N, L = (120 + 380 * hash(k, 7)) * clamp01(u * 3 - k * .05), sw = Math.sin(sec * 1.3 + k * 1.1) * .1
+    if (L <= 0) continue
+    const bx = ax + Math.sin(sw) * L, by = TOP + 30 + Math.cos(sw) * L, r = 18 + 16 * hash(k, 3), c = XPAL[k % XPAL.length]
+    p.strokeStyle = "rgba(244,239,230,.55)"; p.lineWidth = 2; p.beginPath(); p.moveTo(ax, TOP + 30); p.lineTo(bx, by); p.stroke()
+    p.fillStyle = "#c9a24a"; p.fillRect(bx - 6, by - 2, 12, 8)
+    p.fillStyle = c; p.beginPath(); p.arc(bx, by + r + 4, r, 0, TAU); p.fill()
+    p.fillStyle = "rgba(255,255,255,.55)"; p.beginPath(); p.arc(bx - r * .35, by + r * .65, r * .28, 0, TAU); p.fill()
+  }
+  p.restore()
+}
+function estrella(u, sec) {                              // the star rises up the arch to the rose window, its rays sweep across both towers until
+  const [rx, ry] = ROSE, rise = ease(clamp01(u / .3))     // the whole building is lit gold at once; then it settles into the DEVSA mark
+  const sx = 960, sy = lerp(GROUND - 80, ry, rise), R = lerp(40, 120, rise) * (1 - .6 * clamp01((u - .72) / .2))
+  p.save(); p.clip(FACADE)
+  const full = clamp01((u - .32) / .15) * (1 - clamp01((u - .7) / .15))                                       // the whole facade, lit at once
+  if (full > 0) { const gr = p.createRadialGradient(sx, sy, 0, sx, sy, 900); gr.addColorStop(0, `rgba(255,214,120,${(.85 * full).toFixed(3)})`); gr.addColorStop(1, `rgba(200,120,40,${(.45 * full).toFixed(3)})`)
+    p.fillStyle = gr; p.fillRect(0, 0, W, H) }
+  const rays = clamp01((u - .18) / .2) * (1 - clamp01((u - .75) / .1))
+  for (let k = 0; k < 14; k++) {                            // rays sweeping across the towers
+    const a = -Math.PI / 2 + (k - 6.5) * .22 + Math.sin(sec * .6) * .15, len = 1200 * rays
+    p.strokeStyle = `rgba(255,226,150,${(.5 * rays).toFixed(3)})`; p.lineWidth = 10; p.beginPath(); p.moveTo(sx, sy); p.lineTo(sx + Math.cos(a) * len, sy + Math.sin(a) * len); p.stroke()
+  }
+  p.restore()
+  const sa = 1 - clamp01((u - .74) / .12)                  // the seven-point star itself
+  if (sa > 0) { p.save(); p.globalAlpha *= sa; p.shadowColor = "#ffcf4a"; p.shadowBlur = 40; p.fillStyle = "#ffe9a8"; p.beginPath()
+    for (let q = 0; q < 14; q++) { const a = -Math.PI / 2 + q * Math.PI / 7 + sec * .2, rr = q % 2 ? R * .42 : R; p.lineTo(sx + Math.cos(a) * rr, sy + Math.sin(a) * rr) } p.closePath(); p.fill(); p.restore() }
+  const ma = clamp01((u - .8) / .12)                       // and the DEVSA mark, as the show began
+  if (ma > 0 && MARK.complete) { const w = 400, h = w * 551.8 / 735.7; p.save(); p.globalAlpha *= ma; p.globalCompositeOperation = "lighter"; p.drawImage(MARK, 960 - w / 2, 600 - h / 2, w, h); p.restore(); MARK_AT = [960 - w / 2, 600 - h / 2, w, h] }
+}
+const XFILMS = [                                        // the luminarias and the nochebuena in the arch; the rest across the whole facade
   FILMS[0],                                              // the DEVSA mark opens the show, as always
-  { len: 24, draw: (u, sec) => cover(XFILM.luminarias, sec, 960) },
-  { len: 24, draw: (u, sec) => cover(XFILM.nochebuena, sec, 960) },
-  { len: 24, draw: (u, sec) => cover(XFILM.papel, sec, 960) },
-  { len: 24, draw: (u, sec) => cover(XFILM.ornaments, sec, 960) },
-  { len: 24, draw: (u, sec) => cover(XFILM.terminal, sec, 960) },
+  { len: 22, draw: (u, sec) => cover(XFILM.luminarias, sec, 960) },
+  { len: 22, draw: (u, sec) => cover(XFILM.nochebuena, sec, 960) },
+  { len: 24, framed: false, draw: (u, sec) => papelFacade(u, sec) },     // across the whole facade, tower to tower
+  { len: 24, framed: false, draw: (u, sec) => ornamentsFacade(u, sec) }, // hanging from the cornice, across the whole front
+  { len: 28, framed: false, draw: (u, sec) => estrella(u, sec) },        // the finale: the star, the whole building lit, the mark
 ]
 const SCHEDULE = (() => {                                 // the films fill the loop, stretched or squeezed to its length
   const SHOW = XMAS ? XFILMS : FILMS
@@ -369,7 +422,7 @@ function projection(t) {
   p.clearRect(0, 0, W, H); p.fillStyle = "#000"; p.fillRect(0, 0, W, H)
   const i = SCHEDULE.findIndex(s => c >= s.at && c < s.at + s.len), s = SCHEDULE[Math.max(0, i)], local = c - s.at
   // each segment: the whole building plays, the film arrives in the arch, a sweep carries it away
-  const INTRO = 4.5, OUT = 1.8
+  const INTRO = XMAS ? 2 : 4.5, OUT = 1.8                                 // Christmas: the film arrives right after the wipe
   const filmIn = clamp01((local - INTRO + .8) / 1.4), filmOut = clamp01((s.len - local) / OUT), filmA = filmIn * filmOut
   const play = 1 - filmA * .55                                            // the building quietens under a film
   stonePatterns(c, play)
@@ -409,7 +462,7 @@ function wipe(local) {
 const TOWERS = [[LT0, LT1], [RT0, RT1]]
 function towers(i, local, len, a) {
   if (a <= .02 || i <= 0) return
-  const kind = ["", "luminarias", "nochebuena", "papel", "ornaments", "terminal"][i], u = local / len
+  const kind = ["", "luminarias", "nochebuena", "", "", ""][i], u = local / len
   p.save(); p.clip(FACADE); p.globalCompositeOperation = "lighter"; p.globalAlpha = a
   for (const [x0, x1] of TOWERS) {
     const w = x1 - x0, cx = (x0 + x1) / 2
@@ -477,34 +530,23 @@ function chair(x, front) {                                         // a folding 
 // Christmas: a loose standing crowd on the plaza, seen from behind, the cast among them; a few hold phones up,
 // their screens glowing with the facade's light. Two rows; the near row larger and darker.
 const ELF_BACK = xs.ELF.slice(0, 15).map((row, r) => r === 6 ? "..S.hhhhhh.S.." : r === 7 ? "..ShhhhhhhhS.." : r === 8 ? "....hhhhhh...." : r === 11 ? "..EEEEEEEEEE.." : row)
-const CROWD = [                                          // [x, row, who]: "p" a person, "pp" one with a phone up, or a cast member
-  [190, 0, "p"], [300, 0, "pp"], [390, 0, "e:" + PINK], [470, 0, "p"], [560, 0, "a:" + TEAL], [650, 0, "p"], [1270, 0, "p"], [1350, 0, "pp"],
-  [1440, 0, "e:" + TEAL], [1530, 0, "p"], [1620, 0, "a:" + ORANGE], [1720, 0, "p"],
-  [250, 1, "p"], [420, 1, "a:" + PINK], [540, 1, "pp"], [1380, 1, "p"], [1500, 1, "e:" + ORANGE], [1660, 1, "pp"]]
+const CROWD = [                                          // [x, row, who]: the cast only, elves ("e") and agents ("a")
+  [210, 0, "e:" + ORANGE], [330, 0, "a:" + PINK], [450, 0, "e:" + PINK], [570, 0, "a:" + TEAL], [1290, 0, "e:" + TEAL],
+  [1410, 0, "a:" + ORANGE], [1530, 0, "e:" + PINK], [1650, 0, "a:" + TEAL],
+  [280, 1, "e:" + TEAL], [470, 1, "a:" + PINK], [1200, 1, "e:" + ORANGE], [1330, 1, "a:" + ORANGE]]   // the near row kept clear of the music credit
 function crowd(t, PJ) {
   const k = (60 * COLS + 80) * 4, spill = [PJ[k] || 120, PJ[k + 1] || 120, PJ[k + 2] || 140]
   for (const row of [0, 1]) for (const [x, r, who] of CROWD) {
     if (r !== row) continue
     const sc = row ? 1.25 : 1, base = row ? 1086 : 1008, sway = Math.sin(t * .7 + x) * 2
-    if (who.startsWith("e:")) { const px = 5.2 * sc, [w, h] = xs.size(ELF_BACK, px)
-      xs.spr(ctx, ELF_BACK, { ...xs.PAL, E: who.slice(2), S: "#c2875a", s: "#a06c44", h: "#2a1a12" }, x - w / 2 + sway, base - h - 20 * sc, px); continue }
-    if (who.startsWith("a:")) { drawPlush(ctx, { x: x + sway, y: base - 10, s: .95 * sc, tint: who.slice(2), number: "", t, back: true, seed: x % 13 }); continue }
-    // a person: head and shoulders from behind, dark, lit along the top by the show
-    const hx = x + sway, hy = base - 118 * sc
-    ctx.fillStyle = row ? "#0e0f13" : "#16171c"
-    ctx.beginPath(); ctx.roundRect(hx - 34 * sc, hy + 26 * sc, 68 * sc, 120 * sc, 22 * sc); ctx.fill()
-    ctx.beginPath(); ctx.arc(hx, hy + 6 * sc, 18 * sc, 0, TAU); ctx.fill()
-    ctx.strokeStyle = `rgba(${spill[0]},${spill[1]},${spill[2]},.55)`; ctx.lineWidth = 2
-    ctx.beginPath(); ctx.arc(hx, hy + 6 * sc, 18 * sc, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke()
-    ctx.beginPath(); ctx.moveTo(hx - 30 * sc, hy + 34 * sc); ctx.quadraticCurveTo(hx, hy + 22 * sc, hx + 30 * sc, hy + 34 * sc); ctx.stroke()
-    if (who === "pp") {                                   // an arm up, a phone recording the show, its screen lit
-      const px = hx + 26 * sc, py = hy - 30 * sc
-      ctx.strokeStyle = row ? "#0e0f13" : "#16171c"; ctx.lineWidth = 12 * sc; ctx.lineCap = "round"; ctx.beginPath(); ctx.moveTo(hx + 26 * sc, hy + 40 * sc); ctx.lineTo(px, py + 18 * sc); ctx.stroke()
-      ctx.fillStyle = "#0b0b0d"; ctx.fillRect(px - 11 * sc, py - 18 * sc, 22 * sc, 36 * sc)
-      ctx.fillStyle = `rgb(${Math.min(255, spill[0] + 60)},${Math.min(255, spill[1] + 60)},${Math.min(255, spill[2] + 60)})`; ctx.fillRect(px - 9 * sc, py - 16 * sc, 18 * sc, 32 * sc)
-      lit(() => glow(px, py, 34 * sc, 34 * sc, `rgba(${spill[0]},${spill[1]},${spill[2]},.35)`))
-      if (Math.floor(t * 2) % 2) { ctx.fillStyle = "#ff3b30"; ctx.beginPath(); ctx.arc(px + 5 * sc, py - 12 * sc, 2.4 * sc, 0, TAU); ctx.fill() }   // recording
-    }
+    const [kind, tint] = who.split(":"), hx = x + sway
+    let topY
+    if (kind === "e") { const px = 5.2 * sc, [w, h] = xs.size(ELF_BACK, px), sk = [["#c2875a", "#a06c44"], ["#f2cfae", "#d9ab86"], ["#6e4428", "#55331e"]][Math.round(x / 120) % 3]
+      xs.spr(ctx, ELF_BACK, { ...xs.PAL, E: tint, S: sk[0], s: sk[1], h: "#2a1a12" }, hx - w / 2, base - h - 20 * sc, px); topY = base - h - 20 * sc }
+    else { drawPlush(ctx, { x: hx, y: base - 10, s: .95 * sc, tint, number: "", t, back: true, seed: x % 13 }); topY = base - 104 * sc }
+    // lit along the top by the show's light
+    lit(() => glow(hx, topY + 20 * sc, 60 * sc, 24 * sc, `rgba(${spill[0]},${spill[1]},${spill[2]},.18)`))
+    continue
   }
 }
 function audience(t) {

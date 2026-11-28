@@ -20,12 +20,11 @@
   screen, speakers on stands at its ends; a treeline and the city's glow over the wall; the lawn. Our own
   drawing of the place, not a trace of any photograph.
 
-  On the screen, in full colour, a program: first devsa.community's hero, "Where San Antonio" and its typed word
-  (Builds, Connects, Grows, Learns) over the wall of 22 event photos in scrolling columns, tilted as the site tilts
-  them; then a picture-house ident (a film leader counting down, the DEVSA alt mark and "presents" in a ring of
-  marquee bulbs) and a short trailer for each of DEVSA's own, localhost:210, PySanAntonio, Access Granted, The Model
-  and More Human Than Human, each its mark, its moving picture from the site and a version of its page's hook. The photos
-  and frames are local only (scene/hero/ and scene/trailers/, out of git), copied from next-devsa's public/.
+  On the screen, in full colour, a program: a picture-house ident (a film leader counting down, the DEVSA alt mark and
+  "presents" in a ring of marquee bulbs), a short trailer for each of DEVSA's own, localhost:210, PySanAntonio, Access
+  Granted, The Model and More Human Than Human, each its mark, its moving picture and a short version of its page's
+  hook, and an outro: the bulbs back on, the mark, "See you in the room" and devsa.community/events. The trailers'
+  frames are local only (scene/trailers/, out of git), copied from next-devsa's public/.
 
   In colour, for Christmas: bulbs along the tower's edges and the wall's top stepping on the beat, a wreath on the
   tower over the screen, luminarias along the lawn, the screen's light falling on the lawn.
@@ -200,7 +199,7 @@ function heroWall(t) {
 // mascot clip, The Model's 8-bit critters, the head, the localhost:210 dot map) and its page's hero paragraph,
 // word for word, set as the page sets it: the body muted, the turn in white. The assets are copied from next-devsa
 // into scene/trailers/ (out of git, like the hero); without them each trailer still runs as its words.
-const PROGRAM = [["hero", 15], ["ident", 10], ["localhost", 19], ["pysa", 19], ["ag", 19], ["model", 19], ["mh", 19]]   // seconds; 120 in all
+const PROGRAM = [["ident", 12], ["localhost", 19], ["pysa", 19], ["ag", 19], ["model", 19], ["mh", 19], ["outro", 13]]   // seconds; 120 in all
 const PSCALE = T / PROGRAM.reduce((a, [, d]) => a + d, 0)
 const [AGS] = fm.loadImg("trailers/ag-sheet.jpg"), [PYS] = fm.loadImg("trailers/pysa-sheet.jpg"), [MHS] = fm.loadImg("trailers/mh-sheet.jpg")
 const [ALTMARK] = fm.loadImg("devsa-alt-logo.svg"), [PYWORD] = fm.loadImg("wordmark-dark.svg"), [LHWORD] = fm.loadImg("localhost-210-wordmark-dark.svg")
@@ -214,9 +213,9 @@ const dataReady = fetch("trailers/localhost-hero.json").then(r => r.json()).then
 // semibold lead (localhost:210's), m The Model's paragraph, all at white/80 as its page sets it
 const HOOKS = {
   ag: [["b", "DEVSA's security conference, built with San Antonio's hacker community. Every other room is people talking about technology."], ["w", "This one is people taking it apart."]],
-  pysa: [["b", "DEVSA's Python conference, for the people writing Python in San Antonio. Talks on agents, testing and what AI is doing to the craft,"], ["w", "and a round of Python Jeopardy, because it should still be fun."]],
-  model: [["m", "DEVSA's AI conference for creators, creatives, founders and builders. Cool vibes, great company, and a room full of people showing each other what comes next — the work itself, not a description of it."]],
-  mh: [["b", "DEVSA's AI conference for developers and engineers: the people building software factories, agent harnesses and everything that runs on them."], ["w", "When the code writes itself, the job is building what writes it."]],
+  pysa: [["b", "DEVSA's Python conference, for the people writing Python in San Antonio."], ["w", "And Python Jeopardy, because it should still be fun."]],
+  model: [["m", "DEVSA's AI conference for creators, creatives, founders and builders."], ["w", "The work itself, not a description of it."]],
+  mh: [["b", "DEVSA's AI conference for developers and engineers."], ["w", "When the code writes itself, the job is building what writes it."]],
   localhost: [["s", "Eight APIs. No one place to find them."], ["b", "localhost:210 is the bridge to all of San Antonio's open data, and to the people who want to explore it."]],
 }
 const RUN_STYLE = { b: ["500", .72], w: ["500", 1], s: ["600", 1], m: ["500", .82] }
@@ -333,14 +332,26 @@ const TRAILER = {
     hold(.9)
   },
 }
+// the outro, after the last trailer: the bulbs come back on round the screen, the DEVSA mark, and where to find the rooms
+function outro(u) {
+  const { x, y, w, h } = SCREEN, cx = x + w / 2, cy = y + h / 2
+  ctx.fillStyle = "#070708"; ctx.fillRect(x, y, w, h)
+  const beam = ctx.createRadialGradient(cx, cy - 30, 0, cx, cy - 30, w * .5); beam.addColorStop(0, "rgba(255,236,200,.14)"); beam.addColorStop(1, "rgba(255,236,200,0)"); ctx.fillStyle = beam; ctx.fillRect(x, y, w, h)
+  if (ALTMARK.complete && ALTMARK.naturalWidth) { const a = appear(u, .4, .9), mw = 150, mh = mw * 551.77 / 735.7
+    ctx.globalAlpha = a; ctx.drawImage(ALTMARK, cx - mw / 2, cy - mh / 2 - 50, mw, mh); ctx.globalAlpha = 1 }
+  ctx.textAlign = "center"; ctx.textBaseline = "alphabetic"
+  ctx.globalAlpha = appear(u, 1.4); ctx.font = '700 24px "Geist Mono"'; ctx.letterSpacing = "8px"; ctx.fillStyle = "rgba(255,255,255,.9)"; ctx.fillText("SEE YOU IN THE ROOM", cx + 4, cy + 72); ctx.letterSpacing = "0px"
+  ctx.globalAlpha = appear(u, 2.4); ctx.font = '500 20px "Geist"'; ctx.fillStyle = "rgba(255,255,255,.75)"; ctx.fillText("devsa.community/events", cx, cy + 106); ctx.globalAlpha = 1
+  bulbRing(u, fm.clamp01(u / .8))
+}
 function screen(t) {
   const { x, y, w, h } = SCREEN
   let u = t, k = 0; while (k < PROGRAM.length - 1 && u >= PROGRAM[k][1] * PSCALE) { u -= PROGRAM[k][1] * PSCALE; k++ }
   const [kind, dur0] = PROGRAM[k], dur = dur0 * PSCALE
   ctx.save(); ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip()
   ctx.fillStyle = "#0a0a0a"; ctx.fillRect(x, y, w, h)
-  if (kind === "hero") heroWall(t)
-  else if (kind === "ident") ident(u)
+  if (kind === "ident") ident(u)
+  else if (kind === "outro") outro(u)
   else { TRAILER[kind](u); wordmark(kind, u); hook(kind, u) }
   const fade = Math.max(0, 1 - u / .45, 1 - (dur - u) / .45)           // each one cuts through black to the next
   if (fade > 0) { ctx.fillStyle = `rgba(0,0,0,${fade.toFixed(3)})`; ctx.fillRect(x, y, w, h) }
@@ -439,8 +450,8 @@ const ROWS3 = [
   { base: 1000, px: 5, seats: [[430, "#c8323c", ["a", ORANGE, "cheer"]], [580, "#b8508f", "drape:#1f4f46"], [1190, "#6a4aa0", ["e", TEAL, 0, 2, "blanket"]], [1360, "#2f5fb0", null], [1530, "#c8323c", ["a", TEAL]], [1700, "#b8508f", ["e", PINK, 3, 1]]] }]
 // the moments: a whisper (t 24 to 31), a blanket pulled up (t 78 to 108), a cheer each time "Builds." finishes typing
 const whisper = t => Math.sin(Math.PI * fm.clamp01((t - 24) / 7))
-const cheer = t => { const u = t - WORD_T[0].type, f = t - (PROGRAM[0][1] * PSCALE + IDENT_FLASH)   // when "Builds." first types, and on the ident's flash
-  return (t < CYCLE && u > 0 && u < 1.4) || (f > 0 && f < 1.6) ? 1 : 0 }
+const cheer = t => { const f = t - IDENT_FLASH                 // on the ident's flash, as the loop opens
+  return f > 0 && f < 1.6 ? 1 : 0 }
 function seat(x, base, px, who, t, k) {
   if (!who) return
   const seatY = base - 9 * px                             // high enough that heads and shoulders clear the chair's back
@@ -536,7 +547,7 @@ function render(t) {
   snow(t)
   footer(t)
 }
-fm.start(render, [heroReady, penguinReady, facesReady, dataReady, ...[AGS, PYS, MHS, ALTMARK, PYWORD, LHWORD].map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r })), document.fonts.load('900 50px "Geist"'), document.fonts.load('italic 400 50px "Geist"')])
+fm.start(render, [penguinReady, facesReady, dataReady, ...[AGS, PYS, MHS, ALTMARK, PYWORD, LHWORD].map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r })), document.fonts.load('900 50px "Geist"'), document.fonts.load('italic 400 50px "Geist"')])
 </script>
 </body>
 </html>

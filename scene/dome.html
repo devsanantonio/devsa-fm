@@ -28,8 +28,8 @@
   front of it on the rail line that runs by the Alamodome: the engine, a container per community group with its logo,
   the DEVSA boxcar or the PySanAntonio flatcar, and the caboose. The groups are split over two passes a loop, left to
   right, with gaps between them where only the dome, its lights and the snow are on screen; the loop starts and ends
-  on an empty track. A crossing at the left (its lamps blink and its gate comes down before each pass) with the
-  cast waiting behind it on the sidewalk, waving at the cars; the street in front. Before each pass the engine's
+  on an empty track. A crossing at the left (its lamps blink and its gate comes down before each pass), the cast
+  waiting behind the gate on the sidewalk, the arm between them and the tracks, waving at the cars; the street in front. Before each pass the engine's
   headlamp lights the track; after it, the dome's glass
   band chases bright. Bulbs strung on the masts' cables, a warm wash on the roof, the skyline at the right dimmed. The dome's glass band chases in red, green and
   the tab colours, lights strung along the roof edge, the mast lamps alternating red and green. Pixel snow, and the
@@ -332,8 +332,8 @@ function ballast() {
   ctx.fillStyle = "rgba(0,0,0,.25)"; for (let x = 0; x < W; x += 9) ctx.fillRect(x + (x * 7) % 5, RAIL + 22 + (x * 13) % 18, 3, 3)
 }
 // the crossing, on the near side of the track at the left, where the train comes in: a post, the crossbuck, two red
-// lamps that blink and a gate arm that comes down a few seconds before the engine appears and lifts once the caboose
-// is past. Behind the gate on the sidewalk, the cast waits and waves at the containers going by
+// lamps that blink and a gate arm that comes down to the right, across the crossing, a few seconds before the engine
+// appears, and lifts once the caboose is past. To its left, behind the gate, the cast waits and waves at the containers
 const CROSS = 330, SIDEWALK = RAIL + 92
 const liftAt = ([t0, t1]) => { for (let tt = t0; tt <= t1; tt += .25) { const hh = EXPRESS.head(tt); if (hh && hh.hx - hh.len > CROSS + 160) return tt } return t1 }   // computed per frame: the train's length is only known once the logos load
 function gateDown(t) {
@@ -358,10 +358,10 @@ function crossing(t) {
 }
 function gateArm(t) {
   const d = gateDown(t), base = SIDEWALK + 6
-  ctx.save(); ctx.translate(CROSS + 8, base - 56); ctx.rotate(-Math.PI / 2 * (1 - d))   // the arm, pointing right along the sidewalk when down, in front of the cast
+  ctx.save(); ctx.translate(CROSS + 8, base - 92); ctx.rotate(-Math.PI / 2 * (1 - d))   // the arm, pointing right when down: behind the cast, between them and the tracks
   for (let k = 0; k < 10; k++) { ctx.fillStyle = k % 2 ? "#ececec" : "#d6223a"; ctx.fillRect(k * 34, -5, 34, 10) }
   ctx.fillStyle = "#ff3b30"; ctx.beginPath(); ctx.arc(330, 0, 5, 0, TAU); ctx.fill(); ctx.restore()
-  ctx.fillStyle = "#2a2a32"; ctx.fillRect(CROSS - 2, base - 68, 22, 24)                                   // the arm's counterweight box
+  ctx.fillStyle = "#2a2a32"; ctx.fillRect(CROSS - 2, base - 104, 22, 24)                                  // the arm's counterweight box
 }
 // the cast on the sidewalk behind the gate, waving while the containers pass
 const SKINS3 = [["#f2cfae", "#d9ab86"], ["#c2875a", "#a06c44"], ["#6e4428", "#55331e"], ["#e0a87e", "#c48a60"]]
@@ -483,7 +483,7 @@ function render(t) {
     ctx.fillStyle = `rgba(235,235,235,${(.25 + v * .75).toFixed(2)})`
     ctx.fillText(ch, x * CELL + CELL / 2, y * CELL + CELL / 2 + 1)
   }
-  if (XMAS) { dimSkyline(); xmasDomeLights(t); arrivals(t); ballast(); trainGlow(t); EXPRESS.track(); EXPRESS.draw(t); crossing(t); waiters(t); gateArm(t) } else { domeLights(t); roadster(t) }
+  if (XMAS) { dimSkyline(); xmasDomeLights(t); arrivals(t); ballast(); trainGlow(t); EXPRESS.track(); EXPRESS.draw(t); crossing(t); gateArm(t); waiters(t) } else { domeLights(t); roadster(t) }
   if (XMAS) xmasSnow(t)
 
   // footer: who this is, and the music credit

@@ -25,7 +25,7 @@
   stone face, luminarias along its edge, string lights across the river from the bridge, stage lights in the tab
   colours on the beat. On stage, a band: the PySanAntonio mascot with his blue guitar (the original image, swaying on
   the beat) and Linux San Antonio's penguin at a keyboard whose keys light on the beat, notes rising. On the steps,
-  the cast seen from behind, a few under blankets, swaying; twice a loop a river barge (blue hull, red rails) carries
+  the cast seen from behind, a few under blankets, swaying; twice a loop a river boat comes downstream from the right, carrying
   elves between the band and the audience, and the steps wave. Pixel snow; the DEVSA FM radio in the footer.
   Replaced the market at La Villita on 2026-11-27.
 -->
@@ -35,7 +35,7 @@
 <script src="xmas-sprites.js"></script>
 <script src="rio-boat.js"></script>
 <script>
-const { W, H, TAU, CELL, TEAL, PINK, ORANGE, ctx, g, T, lerp, hash, glow, lit, footer } = fm
+const { W, H, TAU, CELL, TEAL, PINK, ORANGE, ctx, g, T, lerp, ease, clamp01, hash, glow, lit, footer } = fm
 const GOLD = xs.GOLD
 const BPM = (window.BEATS && window.BEATS.bpm) || 76, OFFSET = (window.BEATS && window.BEATS.offset) || 0
 const beatPh = t => { const b = (t - OFFSET) * BPM / 60; return ((b % 1) + 1) % 1 }
@@ -45,8 +45,8 @@ const pulse = t => Math.exp(-beatPh(t) * 3.5)
 // ---- the layout, in pixels ---------------------------------------------------------------------
 const BANK = 700                                          // the far bank: the stage's deck, the building's foot
 const WATER = 740                                         // the river's far edge, under the bridge
-const NEAR = 905                                          // the river's near edge, the walk's lip
-const STEPS = 950                                         // the grass steps begin
+const NEAR = 965                                          // the river's near edge, the walk's lip (low, so the boats clear the stage)
+const STEPS = 1010                                        // the grass steps begin
 const STAGE = { cx: 1270, x0: 860, x1: 1690, deck: BANK, front: 790, face: 46 }   // round: its front edge bulges to y front at cx
 const stageEdge = x => STAGE.deck + (STAGE.front - STAGE.deck) * Math.sqrt(Math.max(0, 1 - ((x - STAGE.cx) / ((STAGE.x1 - STAGE.x0) / 2)) ** 2))
 const WALL = { x0: 960, x1: 1600, top: 420 }
@@ -151,6 +151,23 @@ function tint(cx, cy, v) {
 
 // ---- 2. in colour ------------------------------------------------------------------------------
 const XL = [TEAL, PINK, ORANGE, GOLD, "#e8323c", "#2fd06a"]
+// a wreath: a full ring of greenery in three greens, red berries, warm lights woven in, a red bow with tails
+const WREATH_DOTS = (() => { const out = []; let sd = 7; const r = () => (sd = (sd * 16807) % 2147483647) / 2147483647
+  for (let i = 0; i < 220; i++) { const a = r() * TAU, d = .62 + r() * .5; out.push([Math.cos(a) * d, Math.sin(a) * d, r()]) } return out })()
+function wreath(x, y, R, t) {
+  const p = Math.max(3, Math.round(R / 7))
+  ctx.fillStyle = "rgba(0,0,0,.3)"; ctx.beginPath(); ctx.arc(x + 3, y + 4, R * 1.05, 0, TAU); ctx.fill()
+  for (const [dx, dy, k] of WREATH_DOTS) { ctx.fillStyle = k < .35 ? "#1d5a32" : k < .75 ? "#2a7a42" : "#3f9a56"; ctx.fillRect(Math.round(x + dx * R) - p * .7, Math.round(y + dy * R) - p * .7, p * 1.4, p * 1.4) }
+  WREATH_DOTS.forEach(([dx, dy], i) => { if (i % 11) return; ctx.fillStyle = "#d6223a"; ctx.fillRect(Math.round(x + dx * R * .95) - p / 2, Math.round(y + dy * R * .95) - p / 2, p, p) })
+  for (let i = 0; i < 8; i++) { const a = i * TAU / 8 + .3, lx = x + Math.cos(a) * R * .85, ly = y + Math.sin(a) * R * .85, tw = .75 + .25 * Math.sin(TAU * 2 * t / T + i)
+    lit(() => glow(lx, ly, 8, 8, `rgba(255,220,150,${(.5 * tw).toFixed(2)})`)); ctx.fillStyle = "#fff1c8"; ctx.fillRect(lx - 1.5, ly - 1.5, 3, 3) }
+  const by = y + R * .78; ctx.fillStyle = "#c8202e"
+  ctx.beginPath(); ctx.moveTo(x, by); ctx.lineTo(x - R * .55, by - R * .3); ctx.lineTo(x - R * .55, by + R * .25); ctx.fill()
+  ctx.beginPath(); ctx.moveTo(x, by); ctx.lineTo(x + R * .55, by - R * .3); ctx.lineTo(x + R * .55, by + R * .25); ctx.fill()
+  ctx.fillStyle = "#a0141f"; ctx.beginPath(); ctx.moveTo(x - 3, by); ctx.lineTo(x - R * .35, by + R * .7); ctx.lineTo(x - R * .18, by + R * .62); ctx.lineTo(x, by + 2); ctx.fill()
+  ctx.beginPath(); ctx.moveTo(x + 3, by); ctx.lineTo(x + R * .35, by + R * .7); ctx.lineTo(x + R * .18, by + R * .62); ctx.lineTo(x, by + 2); ctx.fill()
+  ctx.fillStyle = "#e8323c"; ctx.fillRect(x - p, by - p, 2 * p, 2 * p)
+}
 function arches(t) {                                     // warm light in each arch, a bell swinging on the beat, a wreath over it
   ARCHES.forEach((a, i) => {
     const fl = .85 + .15 * Math.sin(TAU * 3 * t / T + i)
@@ -164,7 +181,7 @@ function arches(t) {                                     // warm light in each a
       ctx.save(); ctx.translate(bx, by); ctx.rotate(sw); ctx.scale(sz, sz); ctx.fillStyle = "#5a3a1a"; ctx.fillRect(-2, -12, 4, 12)
       ctx.fillStyle = "#3a2410"; ctx.beginPath(); ctx.moveTo(-12, 0); ctx.lineTo(12, 0); ctx.lineTo(20, 34); ctx.lineTo(-20, 34); ctx.closePath(); ctx.fill()
       ctx.fillStyle = "#6a4a20"; ctx.fillRect(-20, 30, 40, 4); ctx.restore() }
-    ctx.strokeStyle = "#2f9e4f"; ctx.lineWidth = 9; ctx.beginPath(); ctx.arc(bx, a.top - 26, 18, 0, TAU); ctx.stroke(); ctx.fillStyle = "#e8323c"; ctx.fillRect(bx - 7, a.top - 14, 14, 10)
+    wreath(bx, a.top - 30, 24, t)
   })
 }
 function stucco(t) {                                     // the house's lit windows, the lamp by its door, greenery on the balcony
@@ -254,35 +271,53 @@ function band(t) {
 const [ALT, altReady] = fm.loadImg("devsa-alt-logo.svg")
 const ROCK = t => Math.sin(TAU * 4 * t / fm.LT) * 2.5
 const RIO = makeRioBoat({ ALT, ROCK, LT: fm.LT })
-const BARGE = { n: 2, dur: 26, s: .74, bottom: NEAR - 2 }
+const BARGE = { n: 2, dur: 34, s: .62, bottom: NEAR - 4 }
 const SKINS = [["#f2cfae", "#d9ab86"], ["#c2875a", "#a06c44"], ["#6e4428", "#55331e"], ["#e0a87e", "#c48a60"], ["#9a6440", "#7c4e30"]]
 function bargeAt(t) { for (let k = 0; k < BARGE.n; k++) { const t0 = T * (.18 + k * .5), u = (t - t0) / BARGE.dur; if (u >= 0 && u <= 1) return { u, k } } return null }
+// the route the river boats really take past the theatre: downstream from the right, across in front of the stage,
+// then away under the footbridge, smaller as it goes, hidden by the bridge's stone except through its arch
+const ARCH = { x: (BRIDGE.x0 + BRIDGE.x1) / 2, y: WATER + 10, rx: BRIDGE.rx, ry: BRIDGE.ry }, BRIDGE_R = BRIDGE.x1 + 40
+// the original route: it keeps its lane past the stage, and only once it's past the stage's left end does it turn into
+// the bridge's arch and go under. One steady pace the whole way; it gets a little smaller as it heads off, and the
+// bridge's stone hides it as it goes under, rather than it shrinking away or fading
+const SE = .42                                            // its scale under the bridge
+function bargeRoute(u) {                                  // [centre x, bottom y, scale, alpha]
+  const start = W + 640 * BARGE.s / 2 + 60, turn = BRIDGE_R + 640 * BARGE.s / 2 - 40, end = ARCH.x - ARCH.rx - 640 * SE / 2 - 20
+  const d1 = start - turn, d2 = turn - end, u1 = d1 / (d1 + d2)
+  if (u < u1) return [lerp(start, turn, u / u1), BARGE.bottom, BARGE.s, 1]
+  const a = (u - u1) / (1 - u1), k = clamp01(a / .6), e = k * k * (3 - 2 * k)
+  return [lerp(turn, end, a), lerp(BARGE.bottom, ARCH.y + 2, e), lerp(BARGE.s, SE, e), 1]   // under the bridge it rides at the arch's water line
+}
 function barge(t) {
   const b = bargeAt(t); if (!b) return
-  const s = BARGE.s, wpx = 640 * s, x = lerp(-wpx - 60, W + 60, b.u)
-  ctx.save(); ctx.translate(x - 470 * s, BARGE.bottom - 932 * s); ctx.scale(s, s)
-  for (let i = 0; i < 5; i++) {                          // the riders, peeking over the panels, waving
+  const [cx, bottom, s, alpha] = bargeRoute(b.u), wpx = 640 * s
+  ctx.save()
+  ctx.beginPath(); ctx.rect(BRIDGE_R, 0, W - BRIDGE_R, H)                                               // hidden only by the bridge's stone, which
+  ctx.rect(0, ARCH.y, BRIDGE_R, H - ARCH.y)                                                                // stops at its water line: below that, open river
+  ctx.moveTo(ARCH.x + ARCH.rx, ARCH.y); ctx.ellipse(ARCH.x, ARCH.y, ARCH.rx, ARCH.ry, 0, 0, Math.PI, true); ctx.closePath(); ctx.clip()   // and seen through the arch
+  ctx.globalAlpha = alpha
+  ctx.translate(cx - 790 * s, bottom - 932 * s); ctx.scale(s, s)
+  for (let i = 0; i < 5; i++) {                          // the riders, peeking over the panels, facing the way it goes, waving
     const ex = 540 + i * 130, px = 6
     if (b.k === 1 && i === 2) { drawPlush(ctx, { x: ex, y: 842 + ROCK(t), s: .9, tint: [TEAL, PINK][i % 2], number: "", t, seed: 7 + i, armsUp: Math.sin(t * 5) > 0 ? 1 : 0 }); continue }
     const [w, h] = xs.size(xs.ELF, px), wave = Math.sin(t * 6 + i) > 0, ey = 800 + ROCK(t) - h * .8
-    xs.spr(ctx, xs.ELF, { ...xs.PAL, E: XL[(i + b.k) % 4], S: SKINS[i % 5][0], s: SKINS[i % 5][1] }, ex - w / 2, ey, px)
-    if (wave) { ctx.fillStyle = SKINS[i % 5][0]; ctx.fillRect(ex - w / 2 - px, ey + 3 * px, 2 * px, 3 * px) }
+    xs.spr(ctx, xs.ELF, { ...xs.PAL, E: XL[(i + b.k) % 4], S: SKINS[i % 5][0], s: SKINS[i % 5][1] }, ex - w / 2, ey, px, { flip: true })
+    if (wave) { ctx.fillStyle = SKINS[i % 5][0]; ctx.fillRect(ex + w / 2 - px, ey + 3 * px, 2 * px, 3 * px) }
   }
-  RIO.barge(ctx, t); RIO.bulbs(ctx, t)
+  RIO.barge(ctx, t, -1); RIO.bulbs(ctx, t)
   ctx.restore()
-  lit(() => glow(x + wpx / 2, BARGE.bottom - 10, wpx * .6, 24, "rgba(255,200,120,.12)"))   // its lights on the water
+  lit(() => glow(cx, bottom - 6, wpx * .6, 24 * s / BARGE.s, `rgba(255,200,120,${(.12 * alpha).toFixed(3)})`))   // its lights on the water
 }
 
 // ---- the audience on the steps, seen from behind ------------------------------------------------
 const HAIR = ["#3a2418", "#1a1412", "#7a3b1e"]
 const ELF_BACK = xs.ELF.slice(0, 15).map((row, r) => r === 6 ? "..S.hhhhhh.S.." : r === 7 ? "..ShhhhhhhhS.." : r === 8 ? "....hhhhhh...." : r === 11 ? "..EEEEEEEEEE.." : row)
 // [x, row, kind, colour, skin, hair, blanket]
-const SEATS = [[330, 0, "e", TEAL, 0, 0], [470, 0, "a", PINK], [620, 0, "e", ORANGE, 2, 1, "#2f6d3b"], [1080, 0, "a", TEAL], [1230, 0, "e", PINK, 3, 2], [1380, 0, "e", TEAL, 1, 0, "#7a2a3a"],
-               [400, 1, "a", ORANGE], [560, 1, "e", PINK, 4, 1], [1150, 1, "e", ORANGE, 0, 2, "#2f4f7a"], [1310, 1, "a", PINK]]
+const SEATS = [[300, 0, "e", TEAL, 0, 0], [450, 0, "a", PINK], [600, 0, "e", ORANGE, 2, 1, "#2f6d3b"], [1060, 0, "a", TEAL], [1210, 0, "e", PINK, 3, 2], [1360, 0, "e", TEAL, 1, 0, "#7a2a3a"]]   // one row, along the bottom
 function audience(t) {
   const passing = !!bargeAt(t) && bargeAt(t).u > .15 && bargeAt(t).u < .85, sw = Math.sin(TAU * BPM / 60 * (t - OFFSET) / 2)
   SEATS.slice().sort((a, b) => a[1] - b[1]).forEach(([x, row, kind, c, sk, hr, blanket], i) => {
-    const base = STEPS + 44 + row * 56, px = row ? 6 : 5, dx = Math.round(sw * 3 * (i % 2 ? 1 : -1))
+    const base = STEPS + 46 + row * 56, px = row ? 6 : 5, dx = Math.round(sw * 3 * (i % 2 ? 1 : -1))
     if (kind === "e") {
       const [w, h] = xs.size(ELF_BACK, px); xs.spr(ctx, ELF_BACK, { ...xs.PAL, E: c, S: SKINS[sk][0], s: SKINS[sk][1], h: HAIR[hr] }, x - w / 2 + dx, base - h, px)
       if (blanket) { ctx.fillStyle = blanket; ctx.fillRect(x - 7 * px + dx, base - 6 * px, 14 * px, 6 * px); ctx.fillStyle = "rgba(244,239,230,.8)"; for (let q = 0; q < 3; q++) ctx.fillRect(x - 7 * px + dx, base - 5 * px + q * 2 * px, 14 * px, Math.max(1, px * .4)) }
@@ -306,6 +341,20 @@ function snow(t) {
 }
 window.FOOTER_SPRITE = (x, bottom, t) => { xs.radio(ctx, x, bottom - xs.RADIO.length * 3, 3, beatPh(t) / 4 + Math.floor((t - OFFSET) * BPM / 60 % 4 + 4) % 4 / 4); return 26 * 3 }
 
+// the footbridge dressed for Christmas: a garland along its parapet with warm bulbs, red bows at the ends, a wreath at
+// the crown of the arch, and the bulbs' glow on the water
+function bridgeDressing(t) {
+  const B = BRIDGE, mid = (B.x0 + B.x1) / 2, py = x => B.top + 52 * ((Math.max(B.x0, Math.min(B.x1, x)) - mid) / ((B.x1 - B.x0) / 2)) ** 2 - 12
+  ctx.strokeStyle = "#2a7a42"; ctx.lineWidth = 8; ctx.beginPath()
+  for (let x = B.x0 - 20, i = 0; x <= B.x1 + 20; x += 6, i++) { const y = py(x) + Math.abs(Math.sin(i * .2)) * 9; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y) } ctx.stroke()
+  for (let x = B.x0, i = 0; x <= B.x1; x += 26, i++) { const y = py(x) + Math.abs(Math.sin((x - B.x0 + 20) / 6 * .2)) * 9 + 4, tw = .75 + .25 * Math.sin(TAU * 2 * t / T + i)
+    lit(() => { glow(x, y, 10, 10, `rgba(255,220,150,${(.55 * tw).toFixed(2)})`); glow(x, WATER + 60 + (y - 560) * .3, 6, 20, "rgba(255,210,140,.10)") })
+    ctx.fillStyle = i % 5 === 2 ? "#e8323c" : "#fff1c8"; ctx.beginPath(); ctx.arc(x, y, 3.5, 0, TAU); ctx.fill() }
+  for (const x of [B.x0 - 10, B.x1 + 10]) { const y = py(x) + 4; ctx.fillStyle = "#c8202e"                // bows at the ends
+    ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 16, y - 9); ctx.lineTo(x - 16, y + 9); ctx.fill(); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 16, y - 9); ctx.lineTo(x + 16, y + 9); ctx.fill()
+    ctx.fillStyle = "#a0141f"; ctx.fillRect(x - 3, y, 6, 22) }
+  wreath(mid, ARCH.y - ARCH.ry + 34, 26, t)                                                                 // at the crown of the arch
+}
 function render(t) {
   paint(t)
   fm.ascii("#07080c", tint)
@@ -317,6 +366,7 @@ function render(t) {
   nochebuenas(t)
   riverLights(t)
   barge(t)
+  bridgeDressing(t)
   audience(t)
   snow(t)
   footer(t)
